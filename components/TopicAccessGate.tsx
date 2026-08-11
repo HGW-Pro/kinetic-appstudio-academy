@@ -3,9 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "./AuthProvider";
-import { loadLocalProgress, loadRemoteProgress } from "../lib/progress";
+import { loadRemoteProgress } from "../lib/progress";
 import { getCourse } from "../lib/courses";
 
+/**
+ * Course-aware sequential lock. A topic (Module) at index N is locked until
+ * the topic at index N-1 has been passed (quiz score >= 80%, i.e. completedAt
+ * is set). Signed-out visitors can only ever preview topic 0.
+ */
 export default function TopicAccessGate({
   courseSlug,
   topicSlug,
@@ -31,7 +36,6 @@ export default function TopicAccessGate({
       let blocker = "";
 
       if (!user) {
-        // Signed-out visitors can only ever preview the very first topic.
         lock = idx > 0;
         blocker = topics[0]?.title ?? "";
       } else {
@@ -73,7 +77,7 @@ export default function TopicAccessGate({
             href={`/courses/${courseSlug}`}
             className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
           >
-            ← Back to Course Outline
+            ← Back to Course Topics
           </Link>
           {!user && (
             <Link

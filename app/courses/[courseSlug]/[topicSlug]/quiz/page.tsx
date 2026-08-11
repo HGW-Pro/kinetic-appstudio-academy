@@ -4,8 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getCourse, getTopic } from "../../../../../lib/courses";
-import QuizEngine from "../../../../../components/QuizEngine";
 import TopicAccessGate from "../../../../../components/TopicAccessGate";
+import QuizEngine from "../../../../../components/QuizEngine";
 import { useAuth } from "../../../../../components/AuthProvider";
 import { loadRemoteProgress } from "../../../../../lib/progress";
 
@@ -20,7 +20,7 @@ export default function TopicQuizPage({
 
   const { user, loading: authLoading } = useAuth();
   const [checked, setChecked] = useState(false);
-  const [lessonsIncomplete, setLessonsIncomplete] = useState(false);
+  const [subtopicsIncomplete, setSubtopicsIncomplete] = useState(false);
 
   const idx = course.topics.findIndex((t) => t.slug === topic.slug);
   const next = course.topics[idx + 1];
@@ -33,7 +33,7 @@ export default function TopicQuizPage({
     (async () => {
       const progress = await loadRemoteProgress(user.id);
       const done = progress[topic.slug]?.lessonsCompleted.length ?? 0;
-      setLessonsIncomplete(done < topic.lessons.length);
+      setSubtopicsIncomplete(done < topic.lessons.length);
       setChecked(true);
     })();
   }, [user, authLoading, topic.slug, topic.lessons.length]);
@@ -66,7 +66,7 @@ export default function TopicQuizPage({
 
   return (
     <TopicAccessGate courseSlug={course.slug} topicSlug={topic.slug}>
-      {checked && lessonsIncomplete ? (
+      {checked && subtopicsIncomplete ? (
         <div className="glass-card glow-border mx-auto max-w-lg rounded-2xl p-10 text-center">
           <div className="text-5xl">📘</div>
           <h1 className="mt-4 text-xl font-bold text-[var(--text-hi)]">Finish the subtopics first</h1>
@@ -95,9 +95,16 @@ export default function TopicQuizPage({
             moduleSlug={topic.slug}
             moduleTitle={topic.title}
             questions={topic.quiz}
-            nextHref={next ? `/courses/${course.slug}/${next.slug}` : undefined}
-            backHref={`/courses/${course.slug}`}
+            nextModuleSlug={next?.slug}
           />
+          {next && (
+            <p className="text-center text-xs text-[var(--text-lo)]">
+              Passing unlocks:{" "}
+              <Link href={`/courses/${course.slug}/${next.slug}`} className="text-[var(--primary)] hover:underline">
+                {next.title}
+              </Link>
+            </p>
+          )}
         </div>
       )}
     </TopicAccessGate>

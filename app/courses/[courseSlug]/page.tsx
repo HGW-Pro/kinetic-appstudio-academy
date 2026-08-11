@@ -24,35 +24,32 @@ export default function CourseTopicsPage({ params }: { params: { courseSlug: str
     })();
   }, [user, authLoading]);
 
-  const topics = course.topics;
   const highestUnlocked = (() => {
     if (!user) return 0;
     let idx = 0;
-    for (let i = 0; i < topics.length; i++) {
-      if (progress[topics[i].slug]?.completedAt) idx = i + 1;
-      else break;
+    for (let i = 0; i < course.topics.length; i++) {
+      if (progress[course.topics[i].slug]?.completedAt) {
+        idx = i + 1;
+      } else {
+        break;
+      }
     }
-    return Math.min(idx, topics.length - 1);
+    return Math.min(idx, course.topics.length - 1);
   })();
 
   return (
     <div className="space-y-8">
       <div>
-        <Link href="/courses" className="text-sm font-medium text-[var(--primary)] hover:underline">
-          ← All Courses
-        </Link>
-        <div className="mt-3 flex items-center gap-3">
-          <span className="text-4xl">{course.icon}</span>
-          <div>
-            <span className="badge-pill">Course</span>
-            <h1 className="mt-1 text-3xl font-bold text-[var(--text-hi)]">{course.title}</h1>
-          </div>
-        </div>
-        <p className="mt-3 max-w-2xl text-sm text-[var(--text-mid)]">{course.description}</p>
+        <span className="badge-pill">{course.icon} Course</span>
+        <h1 className="mt-4 text-3xl font-bold text-[var(--text-hi)]">{course.title}</h1>
+        <p className="mt-2 max-w-2xl text-sm text-[var(--text-mid)]">{course.tagline}</p>
+        <p className="mt-2 max-w-2xl text-xs text-[var(--text-lo)]">
+          Main Topics unlock strictly in order — pass a topic's assignment (80%+) to unlock the next.
+        </p>
       </div>
 
       <div className="space-y-4">
-        {topics.map((topic, idx) => {
+        {course.topics.map((topic, idx) => {
           const isCertified = !!progress[topic.slug]?.completedAt;
           const isLocked = ready && (!user ? idx > 0 : idx > highestUnlocked);
           const card = (
@@ -98,6 +95,7 @@ export default function CourseTopicsPage({ params }: { params: { courseSlug: str
               </div>
             </div>
           );
+
           return isLocked ? (
             <div key={topic.slug} className="cursor-not-allowed">
               {card}
