@@ -98,4 +98,4 @@ export const epicorBasicsModule = {
       explanation: "Enterprise Search is almost always faster than navigating the menu tree manually.",
     },
   ],
-} as Module;
+} as unknown as Module;
