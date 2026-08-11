@@ -1,60 +1,60 @@
 import Link from "next/link";
-import { courses, totalLessonsInCourse, totalQuizQuestionsInCourse } from "../lib/courses";
+import { courses } from "../lib/courses";
 
-export default function CourseCatalogPage() {
+export default function HomePage() {
   return (
-    <div className="space-y-10">
+    <div className="space-y-12">
       <section className="hero-band relative overflow-hidden rounded-2xl px-6 py-14 text-center text-white sm:px-12">
         <span className="mx-auto mb-6 flex w-fit items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide">
           🎓 Internal Training Catalog
         </span>
         <h1 className="mx-auto max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-          Epicor Kinetic Training Catalog
+          Epicor Training Catalog
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-base text-white/85 sm:text-lg">
-          Pick a course below. Every course is strictly sequential — Main Topics unlock one at a
-          time, and each Main Topic breaks down into interactive Subtopics you click through
-          rather than read as a wall of text.
+          Pick a course below. Every course is a strict, sequential path — topics and their
+          subtopics unlock one at a time as you complete and pass each assignment.
         </p>
       </section>
 
       <section>
-        <h2 className="mb-5 text-2xl font-semibold text-[var(--text-hi)]">Available Courses</h2>
+        <h2 className="mb-6 text-2xl font-semibold text-[var(--text-hi)]">Available Courses</h2>
         <div className="grid gap-6 sm:grid-cols-2">
           {courses.map((course) => {
-            const totalLessons = totalLessonsInCourse(course);
-            const totalQuiz = totalQuizQuestionsInCourse(course);
-            const isEmpty = course.topics.length === 0;
-            return (
-              <div key={course.slug} className="glass-card glow-border flex flex-col rounded-2xl p-7">
-                <div className="flex items-center gap-4">
-                  <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)] text-2xl text-white">
-                    {course.icon}
-                  </span>
-                  <div>
-                    <span className="badge-pill">Course</span>
-                    <h3 className="mt-1 text-lg font-bold text-[var(--text-hi)]">{course.title}</h3>
+            const comingSoon = course.status === "coming-soon";
+            const totalSubtopics = course.topics.reduce((n, t) => n + t.lessons.length, 0);
+            const totalMinutes = course.topics.reduce((n, t) => n + t.estMinutes, 0);
+
+            const card = (
+              <div
+                className={`glass-card flex h-full flex-col justify-between rounded-2xl p-7 transition ${
+                  comingSoon ? "opacity-60" : "hover:-translate-y-1 hover:shadow-lg"
+                }`}
+              >
+                <div>
+                  <div className="mb-4 flex items-center justify-between">
+                    <span className="flex h-14 w-14 items-center justify-center rounded-xl bg-[var(--primary)] text-2xl text-white">
+                      {course.icon}
+                    </span>
+                    <span className="badge-pill">{comingSoon ? "Coming Soon" : "Available"}</span>
                   </div>
+                  <h3 className="text-xl font-bold text-[var(--text-hi)]">{course.title}</h3>
+                  <p className="mt-2 text-sm text-[var(--text-mid)]">{course.tagline}</p>
                 </div>
-                <p className="mt-4 flex-1 text-sm text-[var(--text-mid)]">{course.tagline}</p>
-                <div className="mt-5 flex flex-wrap gap-3 text-xs text-[var(--text-lo)]">
-                  <span className="badge-pill">{course.topics.length} main topics</span>
-                  <span className="badge-pill">{totalLessons} subtopics</span>
-                  <span className="badge-pill">{totalQuiz} quiz Qs</span>
+                <div className="mt-6 flex items-center justify-between text-xs text-[var(--text-lo)]">
+                  <span>{course.topics.length} topics</span>
+                  <span>{totalSubtopics} subtopics</span>
+                  <span>{totalMinutes}m total</span>
                 </div>
-                {isEmpty ? (
-                  <span className="mt-6 inline-block rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-6 py-3 text-center text-sm font-semibold text-[var(--text-lo)]">
-                    Coming Soon
-                  </span>
-                ) : (
-                  <Link
-                    href={`/courses/${course.slug}`}
-                    className="mt-6 inline-block rounded-md bg-[var(--primary)] px-6 py-3 text-center text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
-                  >
-                    View Course →
-                  </Link>
-                )}
               </div>
+            );
+
+            return comingSoon ? (
+              <div key={course.slug}>{card}</div>
+            ) : (
+              <Link key={course.slug} href={`/courses/${course.slug}`}>
+                {card}
+              </Link>
             );
           })}
         </div>
@@ -65,8 +65,8 @@ export default function CourseCatalogPage() {
           Ready to prove it? Try a real lab.
         </h2>
         <p className="mx-auto mt-2 max-w-xl text-sm text-[var(--text-mid)]">
-          Every course pairs with hands-on labs so you build actual Kinetic configurations — not
-          just answer trivia.
+          Every course pairs with a hands-on lab in the Labs section, so you build actual
+          Kinetic configurations — not just answer trivia.
         </p>
         <Link
           href="/labs"

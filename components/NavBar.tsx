@@ -6,9 +6,9 @@ import { useAuth } from "./AuthProvider";
 import SoundToggle from "./SoundToggle";
 
 const links = [
-  { href: "/", label: "Home" },
+  { href: "/", label: "Course Catalog" },
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/courses", label: "Courses" },
+  { href: "/courses/kinetic-application-studio", label: "Kinetic App Studio" },
   { href: "/labs", label: "Hands-On Labs" },
 ];
 
@@ -76,7 +76,7 @@ export default function NavBar() {
             </Link>
           ) : null}
           <Link
-            href="/courses"
+            href="/courses/kinetic-application-studio"
             className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] sm:hidden"
           >
             Start

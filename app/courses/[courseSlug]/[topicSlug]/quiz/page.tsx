@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCourse, getTopic } from "../../../../../lib/courses";
-import TopicAccessGate from "../../../../../components/TopicAccessGate";
+import { getCourse } from "../../../../../lib/courses";
 import QuizEngine from "../../../../../components/QuizEngine";
+import ModuleAccessGate from "../../../../../components/ModuleAccessGate";
 import { useAuth } from "../../../../../components/AuthProvider";
 import { loadRemoteProgress } from "../../../../../lib/progress";
 
@@ -15,12 +15,13 @@ export default function TopicQuizPage({
   params: { courseSlug: string; topicSlug: string };
 }) {
   const course = getCourse(params.courseSlug);
-  const topic = getTopic(params.courseSlug, params.topicSlug);
-  if (!course || !topic) notFound();
+  if (!course) notFound();
+  const topic = course.topics.find((t) => t.slug === params.topicSlug);
+  if (!topic) notFound();
 
   const { user, loading: authLoading } = useAuth();
   const [checked, setChecked] = useState(false);
-  const [subtopicsIncomplete, setSubtopicsIncomplete] = useState(false);
+  const [lessonsIncomplete, setLessonsIncomplete] = useState(false);
 
   const idx = course.topics.findIndex((t) => t.slug === topic.slug);
   const next = course.topics[idx + 1];
@@ -33,7 +34,7 @@ export default function TopicQuizPage({
     (async () => {
       const progress = await loadRemoteProgress(user.id);
       const done = progress[topic.slug]?.lessonsCompleted.length ?? 0;
-      setSubtopicsIncomplete(done < topic.lessons.length);
+      setLessonsIncomplete(done < topic.lessons.length);
       setChecked(true);
     })();
   }, [user, authLoading, topic.slug, topic.lessons.length]);
@@ -65,8 +66,8 @@ export default function TopicQuizPage({
   }
 
   return (
-    <TopicAccessGate courseSlug={course.slug} topicSlug={topic.slug}>
-      {checked && subtopicsIncomplete ? (
+    <ModuleAccessGate moduleSlug={topic.slug}>
+      {checked && lessonsIncomplete ? (
         <div className="glass-card glow-border mx-auto max-w-lg rounded-2xl p-10 text-center">
           <div className="text-5xl">📘</div>
           <h1 className="mt-4 text-xl font-bold text-[var(--text-hi)]">Finish the subtopics first</h1>
@@ -95,18 +96,11 @@ export default function TopicQuizPage({
             moduleSlug={topic.slug}
             moduleTitle={topic.title}
             questions={topic.quiz}
-            nextModuleSlug={next?.slug}
+            nextHref={next ? `/courses/${course.slug}/${next.slug}` : undefined}
+            backHref={`/courses/${course.slug}`}
           />
-          {next && (
-            <p className="text-center text-xs text-[var(--text-lo)]">
-              Passing unlocks:{" "}
-              <Link href={`/courses/${course.slug}/${next.slug}`} className="text-[var(--primary)] hover:underline">
-                {next.title}
-              </Link>
-            </p>
-          )}
         </div>
       )}
-    </TopicAccessGate>
+    </ModuleAccessGate>
   );
 }

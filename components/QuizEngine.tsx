@@ -14,7 +14,7 @@ export default function QuizEngine({
   questions,
   nextModuleSlug,
   nextHref,
-  backHref,
+  backHref = "/dashboard",
 }: {
   moduleSlug: string;
   moduleTitle: string;
@@ -34,7 +34,6 @@ export default function QuizEngine({
   const q = questions[current];
   const isLast = current === questions.length - 1;
   const resolvedNextHref = nextHref ?? (nextModuleSlug ? `/modules/${nextModuleSlug}` : undefined);
-  const resolvedBackHref = backHref ?? "/dashboard";
 
   function choose(idx: number) {
     if (locked) return;
@@ -126,7 +125,7 @@ export default function QuizEngine({
               </Link>
             )}
             <Link
-              href={resolvedBackHref}
+              href={backHref}
               className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
             >
               Back to Dashboard
