@@ -20,6 +20,7 @@ export default function ModuleDetailPage({
   const { user } = useAuth();
   const [enrolled, setEnrolled] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
+  const [enrollError, setEnrollError] = useState<string | null>(null);
 
   const idx = modules.findIndex((m) => m.slug === mod.slug);
   const prev = modules[idx - 1];
@@ -27,13 +28,19 @@ export default function ModuleDetailPage({
 
   useEffect(() => {
     setEnrolled(false);
+    setEnrollError(null);
   }, [mod.slug]);
 
   async function handleEnroll() {
     if (!user) return;
     setEnrolling(true);
-    await enrollInModule(user.id, mod.slug);
+    setEnrollError(null);
+    const { error } = await enrollInModule(user.id, mod.slug);
     setEnrolling(false);
+    if (error) {
+      setEnrollError("Enrollment failed to save: " + error);
+      return;
+    }
     setEnrolled(true);
   }
 
@@ -53,17 +60,22 @@ export default function ModuleDetailPage({
             </div>
 
             {user ? (
-              <button
-                onClick={handleEnroll}
-                disabled={enrolling || enrolled}
-                className={`rounded-md px-4 py-2 text-sm font-semibold shadow-sm transition ${
-                  enrolled
-                    ? "cursor-default bg-[var(--success-soft)] text-[var(--success)]"
-                    : "bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)]"
-                }`}
-              >
-                {enrolled ? "Enrolled ✓" : enrolling ? "Enrolling…" : "Enroll in Module"}
-              </button>
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  onClick={handleEnroll}
+                  disabled={enrolling || enrolled}
+                  className={`rounded-md px-4 py-2 text-sm font-semibold shadow-sm transition ${
+                    enrolled
+                      ? "cursor-default bg-[var(--success-soft)] text-[var(--success)]"
+                      : "bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)]"
+                  }`}
+                >
+                  {enrolled ? "Enrolled ✓" : enrolling ? "Enrolling…" : "Enroll in Module"}
+                </button>
+                {enrollError && (
+                  <p className="max-w-xs text-right text-xs text-[var(--error)]">⚠️ {enrollError}</p>
+                )}
+              </div>
             ) : (
               <Link
                 href="/login"

@@ -26,6 +26,8 @@ export default function QuizEngine({
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   const q = questions[current];
   const isLast = current === questions.length - 1;
@@ -39,10 +41,21 @@ export default function QuizEngine({
     if (correct) setScore((s) => s + 1);
   }
 
-  function next() {
+  async function next() {
     if (isLast) {
       const pct = Math.round((score / questions.length) * 100);
-      recordQuizResult(moduleSlug, pct, user?.id);
+      setSaving(true);
+      setSyncError(null);
+      const { remoteWrite } = recordQuizResult(moduleSlug, pct, user?.id);
+      if (remoteWrite) {
+        const { error } = await remoteWrite;
+        if (error) {
+          setSyncError(
+            "This score was saved on this device, but couldn't sync to your account: " + error
+          );
+        }
+      }
+      setSaving(false);
       const passed = pct >= 80;
       playSound(passed ? "fanfare" : "wrong");
       if (passed) {
@@ -65,6 +78,7 @@ export default function QuizEngine({
     setLocked(false);
     setScore(0);
     setFinished(false);
+    setSyncError(null);
   }
 
   if (finished) {
@@ -101,6 +115,11 @@ export default function QuizEngine({
                 Sign in
               </Link>{" "}
               to sync it to your profile.
+            </p>
+          )}
+          {syncError && (
+            <p className="mt-3 rounded-lg border border-[var(--error)]/30 bg-[var(--error-soft)] px-4 py-2 text-xs text-[var(--error)]">
+              ⚠️ {syncError}
             </p>
           )}
           <div className="mt-8 flex flex-wrap justify-center gap-3">
@@ -187,9 +206,10 @@ export default function QuizEngine({
         {locked && (
           <button
             onClick={next}
-            className="mt-6 w-full rounded-md bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
+            disabled={saving}
+            className="mt-6 w-full rounded-md bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] disabled:opacity-60"
           >
-            {isLast ? "See Results" : "Next Question →"}
+            {saving ? "Saving…" : isLast ? "See Results" : "Next Question →"}
           </button>
         )}
       </div>

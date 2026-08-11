@@ -29,6 +29,8 @@ export default function LessonList({
   const [expandedId, setExpandedId] = useState<string>(lessons[0]?.id ?? "");
   const [justCompleted, setJustCompleted] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const state = loadLocalProgress();
@@ -42,20 +44,30 @@ export default function LessonList({
 
   if (!mounted) return null;
 
-  // Without a signed-in account, progress cannot advance past lesson 1 —
-  // completion is gated on being signed in, same as Enroll.
   const highestUnlockedIndex = user
     ? Math.min(completed.length, lessons.length - 1)
     : 0;
   const pathPct = lessons.length > 1 ? (highestUnlockedIndex / (lessons.length - 1)) * 100 : 0;
 
-  function handleComplete(lessonId: string, index: number) {
+  async function handleComplete(lessonId: string, index: number) {
     if (!user) return;
-    markLessonComplete(moduleSlug, lessonId, user.id);
-    const updated = completed.includes(lessonId) ? completed : [...completed, lessonId];
+    setSyncError(null);
+    setSaving(true);
+    const { state, remoteWrite } = markLessonComplete(moduleSlug, lessonId, user.id);
+    const updated = state[moduleSlug]?.lessonsCompleted ?? [];
     setCompleted(updated);
     setJustCompleted(lessonId);
     playSound(index === lessons.length - 1 ? "complete" : "unlock");
+
+    if (remoteWrite) {
+      const { error } = await remoteWrite;
+      if (error) {
+        setSyncError(
+          "This was saved on this device, but couldn't sync to your account: " + error
+        );
+      }
+    }
+    setSaving(false);
 
     const next = lessons[index + 1];
     window.setTimeout(() => {
@@ -92,6 +104,12 @@ export default function LessonList({
           >
             Sign In →
           </Link>
+        </div>
+      )}
+
+      {syncError && (
+        <div className="mb-5 rounded-xl border border-[var(--error)]/30 bg-[var(--error-soft)] px-5 py-3 text-sm text-[var(--error)] sm:ml-14">
+          ⚠️ {syncError}
         </div>
       )}
 
@@ -183,14 +201,20 @@ export default function LessonList({
                     {user ? (
                       <button
                         onClick={() => handleComplete(lesson.id, i)}
-                        disabled={isDone}
+                        disabled={isDone || saving}
                         className={`mt-5 rounded-md px-5 py-2 text-xs font-semibold transition ${
                           isDone
                             ? "cursor-default bg-[var(--surface-2)] text-[var(--text-lo)]"
-                            : "bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)] hover:scale-[1.03]"
+                            : "bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)] hover:scale-[1.03] disabled:opacity-60"
                         }`}
                       >
-                        {isDone ? "Completed ✓" : i === lessons.length - 1 ? "Complete Module →" : "Complete & Continue →"}
+                        {isDone
+                          ? "Completed ✓"
+                          : saving
+                          ? "Saving…"
+                          : i === lessons.length - 1
+                          ? "Complete Module →"
+                          : "Complete & Continue →"}
                       </button>
                     ) : (
                       <Link

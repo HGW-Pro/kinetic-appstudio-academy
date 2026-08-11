@@ -30,11 +30,14 @@ function saveLocalProgress(state: ProgressState) {
 }
 
 // ---- Supabase-backed progress (used when signed in) ----
+// Every function below now returns { error } so the UI can react instead of
+// silently assuming success. Errors are also logged to the console with full
+// detail so they're visible in DevTools / Vercel function logs.
 
 export async function loadRemoteProgress(userId: string): Promise<ProgressState> {
   const state: ProgressState = {};
 
-  const [{ data: lessons }, { data: quizzes }, { data: enrollments }] = await Promise.all([
+  const [lessonsRes, quizzesRes, enrollRes] = await Promise.all([
     supabase.from("lesson_progress").select("module_slug, lesson_id").eq("employee_id", userId),
     supabase
       .from("quiz_attempts")
@@ -44,14 +47,18 @@ export async function loadRemoteProgress(userId: string): Promise<ProgressState>
     supabase.from("enrollments").select("module_slug, status").eq("employee_id", userId),
   ]);
 
-  (lessons ?? []).forEach((row) => {
+  if (lessonsRes.error) console.error("loadRemoteProgress: lesson_progress fetch failed", lessonsRes.error);
+  if (quizzesRes.error) console.error("loadRemoteProgress: quiz_attempts fetch failed", quizzesRes.error);
+  if (enrollRes.error) console.error("loadRemoteProgress: enrollments fetch failed", enrollRes.error);
+
+  (lessonsRes.data ?? []).forEach((row) => {
     const mod = (state[row.module_slug] ??= { lessonsCompleted: [] });
     if (!mod.lessonsCompleted.includes(row.lesson_id)) {
       mod.lessonsCompleted.push(row.lesson_id);
     }
   });
 
-  (quizzes ?? []).forEach((row) => {
+  (quizzesRes.data ?? []).forEach((row) => {
     const mod = (state[row.module_slug] ??= { lessonsCompleted: [] });
     mod.quizScore = Math.max(row.score_pct, mod.quizScore ?? 0);
     mod.quizAttempts = (mod.quizAttempts ?? 0) + 1;
@@ -60,7 +67,7 @@ export async function loadRemoteProgress(userId: string): Promise<ProgressState>
     }
   });
 
-  (enrollments ?? []).forEach((row) => {
+  (enrollRes.data ?? []).forEach((row) => {
     const mod = (state[row.module_slug] ??= { lessonsCompleted: [] });
     mod.enrolled = true;
   });
@@ -68,33 +75,65 @@ export async function loadRemoteProgress(userId: string): Promise<ProgressState>
   return state;
 }
 
-export async function enrollInModule(userId: string, moduleSlug: string) {
-  await supabase
+export async function enrollInModule(
+  userId: string,
+  moduleSlug: string
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
     .from("enrollments")
     .upsert({ employee_id: userId, module_slug: moduleSlug }, { onConflict: "employee_id,module_slug" });
+  if (error) {
+    console.error("enrollInModule failed", { userId, moduleSlug, error });
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
-export async function markLessonCompleteRemote(userId: string, moduleSlug: string, lessonId: string) {
-  await supabase
+export async function markLessonCompleteRemote(
+  userId: string,
+  moduleSlug: string,
+  lessonId: string
+): Promise<{ error: string | null }> {
+  const { error } = await supabase
     .from("lesson_progress")
     .upsert(
       { employee_id: userId, module_slug: moduleSlug, lesson_id: lessonId },
       { onConflict: "employee_id,module_slug,lesson_id" }
     );
+  if (error) {
+    console.error("markLessonCompleteRemote failed", { userId, moduleSlug, lessonId, error });
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
-export async function recordQuizResultRemote(userId: string, moduleSlug: string, scorePct: number) {
-  await supabase.from("quiz_attempts").insert({
+export async function recordQuizResultRemote(
+  userId: string,
+  moduleSlug: string,
+  scorePct: number
+): Promise<{ error: string | null }> {
+  const { error } = await supabase.from("quiz_attempts").insert({
     employee_id: userId,
     module_slug: moduleSlug,
     score_pct: scorePct,
     passed: scorePct >= 80,
   });
+  if (error) {
+    console.error("recordQuizResultRemote failed", { userId, moduleSlug, scorePct, error });
+    return { error: error.message };
+  }
+  return { error: null };
 }
 
 // ---- Unified helpers used by components: work signed-in or signed-out ----
+// These now return whatever error (if any) came back from the remote write,
+// so callers can surface it instead of assuming the save always succeeded.
 
-export function markLessonComplete(moduleSlug: string, lessonId: string, userId?: string | null) {
+export function markLessonComplete(
+  moduleSlug: string,
+  lessonId: string,
+  userId?: string | null
+): { state: ProgressState; remoteWrite?: Promise<{ error: string | null }> } {
   const state = loadLocalProgress();
   const mod = state[moduleSlug] ?? { lessonsCompleted: [] };
   if (!mod.lessonsCompleted.includes(lessonId)) {
@@ -102,11 +141,15 @@ export function markLessonComplete(moduleSlug: string, lessonId: string, userId?
   }
   state[moduleSlug] = mod;
   saveLocalProgress(state);
-  if (userId) void markLessonCompleteRemote(userId, moduleSlug, lessonId);
-  return state;
+  const remoteWrite = userId ? markLessonCompleteRemote(userId, moduleSlug, lessonId) : undefined;
+  return { state, remoteWrite };
 }
 
-export function recordQuizResult(moduleSlug: string, scorePct: number, userId?: string | null) {
+export function recordQuizResult(
+  moduleSlug: string,
+  scorePct: number,
+  userId?: string | null
+): { state: ProgressState; remoteWrite?: Promise<{ error: string | null }> } {
   const state = loadLocalProgress();
   const mod = state[moduleSlug] ?? { lessonsCompleted: [] };
   mod.quizScore = Math.max(scorePct, mod.quizScore ?? 0);
@@ -116,8 +159,8 @@ export function recordQuizResult(moduleSlug: string, scorePct: number, userId?: 
   }
   state[moduleSlug] = mod;
   saveLocalProgress(state);
-  if (userId) void recordQuizResultRemote(userId, moduleSlug, scorePct);
-  return state;
+  const remoteWrite = userId ? recordQuizResultRemote(userId, moduleSlug, scorePct) : undefined;
+  return { state, remoteWrite };
 }
 
 export function loadProgress(): ProgressState {

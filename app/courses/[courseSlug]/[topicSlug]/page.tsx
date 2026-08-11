@@ -28,6 +28,7 @@ export default function TopicPage({
   const [ready, setReady] = useState(false);
   const [enrolled, setEnrolled] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
+  const [enrollError, setEnrollError] = useState<string | null>(null);
 
   const idx = course.topics.findIndex((t) => t.slug === topic.slug);
   const prevTopic = course.topics[idx - 1];
@@ -38,6 +39,7 @@ export default function TopicPage({
     (async () => {
       const p = user ? await loadRemoteProgress(user.id) : loadLocalProgress();
       setProgress(p);
+      setEnrolled(!!p[topic.slug]?.enrolled);
       setReady(true);
     })();
   }, [user, authLoading, topic.slug]);
@@ -45,8 +47,13 @@ export default function TopicPage({
   async function handleEnroll() {
     if (!user) return;
     setEnrolling(true);
-    await enrollInModule(user.id, topic.slug);
+    setEnrollError(null);
+    const { error } = await enrollInModule(user.id, topic.slug);
     setEnrolling(false);
+    if (error) {
+      setEnrollError("Enrollment failed to save: " + error);
+      return;
+    }
     setEnrolled(true);
   }
 
@@ -73,17 +80,22 @@ export default function TopicPage({
             </div>
 
             {user ? (
-              <button
-                onClick={handleEnroll}
-                disabled={enrolling || enrolled}
-                className={`rounded-md px-4 py-2 text-sm font-semibold shadow-sm transition ${
-                  enrolled
-                    ? "cursor-default bg-[var(--success-soft)] text-[var(--success)]"
-                    : "bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)]"
-                }`}
-              >
-                {enrolled ? "Enrolled ✓" : enrolling ? "Enrolling…" : "Enroll in Topic"}
-              </button>
+              <div className="flex flex-col items-end gap-1">
+                <button
+                  onClick={handleEnroll}
+                  disabled={enrolling || enrolled}
+                  className={`rounded-md px-4 py-2 text-sm font-semibold shadow-sm transition ${
+                    enrolled
+                      ? "cursor-default bg-[var(--success-soft)] text-[var(--success)]"
+                      : "bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)]"
+                  }`}
+                >
+                  {enrolled ? "Enrolled ✓" : enrolling ? "Enrolling…" : "Enroll in Topic"}
+                </button>
+                {enrollError && (
+                  <p className="max-w-xs text-right text-xs text-[var(--error)]">⚠️ {enrollError}</p>
+                )}
+              </div>
             ) : (
               <Link
                 href="/login"

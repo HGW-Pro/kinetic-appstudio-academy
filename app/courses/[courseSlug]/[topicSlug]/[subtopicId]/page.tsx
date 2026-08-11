@@ -40,6 +40,8 @@ export default function SubtopicPage({
   const [locked, setLocked] = useState(false);
   const [revealCount, setRevealCount] = useState(1);
   const [reviewedExtras, setReviewedExtras] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
@@ -52,6 +54,7 @@ export default function SubtopicPage({
     })();
     setRevealCount(1);
     setReviewedExtras(false);
+    setSyncError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, authLoading, topic.slug, lessonIdx]);
 
@@ -74,10 +77,24 @@ export default function SubtopicPage({
     setReviewedExtras(true);
   }
 
-  function handleComplete() {
+  async function handleComplete() {
     if (!user || !canComplete) return;
-    markLessonComplete(topic.slug, lesson.id, user.id);
-    setCompletedIds((prev) => (prev.includes(lesson.id) ? prev : [...prev, lesson.id]));
+    setSaving(true);
+    setSyncError(null);
+    const { state, remoteWrite } = markLessonComplete(topic.slug, lesson.id, user.id);
+    setCompletedIds(state[topic.slug]?.lessonsCompleted ?? []);
+
+    if (remoteWrite) {
+      const { error } = await remoteWrite;
+      if (error) {
+        setSaving(false);
+        setSyncError(
+          "Saved on this device, but couldn't sync to your account: " + error + " — you can still continue."
+        );
+        return;
+      }
+    }
+    setSaving(false);
     playSound(nextLesson ? "unlock" : "complete");
     if (nextLesson) {
       router.push(`/courses/${params.courseSlug}/${params.topicSlug}/${nextLesson.id}`);
@@ -121,6 +138,12 @@ export default function SubtopicPage({
           <p className="text-center text-xs text-[var(--text-lo)]">
             Subtopic {lessonIdx + 1} of {topic.lessons.length} · {topic.title}
           </p>
+
+          {syncError && (
+            <div className="rounded-lg border border-[var(--error)]/30 bg-[var(--error-soft)] px-4 py-3 text-sm text-[var(--error)]">
+              ⚠️ {syncError}
+            </div>
+          )}
 
           <div className="glass-card glow-border rounded-2xl p-8">
             <div className="flex items-center justify-between gap-3">
@@ -193,14 +216,14 @@ export default function SubtopicPage({
               ) : user ? (
                 <button
                   onClick={handleComplete}
-                  disabled={!canComplete}
+                  disabled={!canComplete || saving}
                   className={`rounded-md px-6 py-2.5 text-sm font-semibold shadow-sm transition ${
-                    canComplete
+                    canComplete && !saving
                       ? "bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)]"
                       : "cursor-not-allowed bg-[var(--surface-3)] text-[var(--text-lo)]"
                   }`}
                 >
-                  {nextLesson ? "Complete & Continue →" : "Complete Topic →"}
+                  {saving ? "Saving…" : nextLesson ? "Complete & Continue →" : "Complete Topic →"}
                 </button>
               ) : (
                 <Link
