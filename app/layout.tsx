@@ -1,9 +1,11 @@
-import "./globals.css";
 import type { Metadata } from "next";
+import "./globals.css";
+import NavBar from "../components/NavBar";
 
 export const metadata: Metadata = {
   title: "Kinetic AppStudio Academy",
-  description: "Premium learning SaaS for Epicor Kinetic Application Studio",
+  description:
+    "The premium internal training portal for mastering Epicor Kinetic Application Studio — lessons, hands-on labs, and knowledge-check assignments.",
 };
 
 export default function RootLayout({
@@ -13,8 +15,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="bg-slate-950 text-slate-50">
-        {children}
+      <body>
+        <NavBar />
+        <main className="mx-auto max-w-6xl px-4 pb-24 pt-6 sm:px-6 lg:px-8">
+          {children}
+        </main>
+        <footer className="mx-auto max-w-6xl px-4 pb-10 pt-6 text-center text-xs text-[var(--text-lo)] sm:px-6 lg:px-8">
+          Kinetic AppStudio Academy · Built for engineers who ship real Epicor customizations.
+        </footer>
       </body>
     </html>
   );
