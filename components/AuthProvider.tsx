@@ -22,6 +22,16 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+// Always prefer the deployed production URL (set via env) over window.location.origin,
+// so Google sign-in never bounces back to localhost when tested from a local dev server
+// against the same Supabase project, or from a preview deployment.
+function getSiteUrl(): string {
+  const envUrl = process.env.NEXT_PUBLIC_SITE_URL;
+  if (envUrl) return envUrl.replace(/\/$/, "");
+  if (typeof window !== "undefined") return window.location.origin;
+  return "";
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
@@ -59,7 +69,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/dashboard`,
+        redirectTo: `${getSiteUrl()}/dashboard`,
       },
     });
     return { error: error?.message ?? null };
