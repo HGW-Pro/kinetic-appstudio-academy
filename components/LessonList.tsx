@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import type { Lesson } from "../lib/curriculum";
 import { loadLocalProgress, markLessonComplete } from "../lib/progress";
 import { useAuth } from "./AuthProvider";
@@ -21,7 +22,7 @@ export default function LessonList({
   moduleSlug: string;
   lessons: Lesson[];
 }) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [completed, setCompleted] = useState<string[]>([]);
   const [expandedId, setExpandedId] = useState<string>(lessons[0]?.id ?? "");
   const [justCompleted, setJustCompleted] = useState<string | null>(null);
@@ -39,11 +40,16 @@ export default function LessonList({
 
   if (!mounted) return null;
 
-  const highestUnlockedIndex = Math.min(completed.length, lessons.length - 1);
+  // Without a signed-in account, progress cannot advance past lesson 1 —
+  // completion is gated on being signed in, same as Enroll.
+  const highestUnlockedIndex = user
+    ? Math.min(completed.length, lessons.length - 1)
+    : 0;
   const pathPct = lessons.length > 1 ? (highestUnlockedIndex / (lessons.length - 1)) * 100 : 0;
 
   function handleComplete(lessonId: string, index: number) {
-    markLessonComplete(moduleSlug, lessonId, user?.id);
+    if (!user) return;
+    markLessonComplete(moduleSlug, lessonId, user.id);
     const updated = completed.includes(lessonId) ? completed : [...completed, lessonId];
     setCompleted(updated);
     setJustCompleted(lessonId);
@@ -64,6 +70,22 @@ export default function LessonList({
           style={{ height: `${Math.min(pathPct, 100)}%` }}
         />
       </div>
+
+      {!authLoading && !user && (
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--primary)]/25 bg-[var(--primary)]/[0.05] px-5 py-4 sm:ml-14">
+          <p className="text-sm text-[var(--text-mid)]">
+            <span className="font-semibold text-[var(--text-hi)]">Sign in required.</span>{" "}
+            You can read every lesson below, but you must sign in to mark lessons complete,
+            unlock the next one, and track your certification.
+          </p>
+          <Link
+            href="/login"
+            className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
+          >
+            Sign In →
+          </Link>
+        </div>
+      )}
 
       <div className="space-y-5 sm:pl-14">
         {lessons.map((lesson, i) => {
@@ -117,7 +139,8 @@ export default function LessonList({
                     <p className="text-xs text-[var(--text-lo)]">
                       {lesson.minutes} min
                       {lesson.version && lesson.version !== "both" ? ` · New in ${lesson.version}` : ""}
-                      {isLocked ? " · Complete the previous lesson to unlock" : ""}
+                      {isLocked && user ? " · Complete the previous lesson to unlock" : ""}
+                      {isLocked && !user && i > 0 ? " · Sign in to unlock" : ""}
                     </p>
                   </div>
                   {!isLocked && (
@@ -145,25 +168,25 @@ export default function LessonList({
                       </div>
                     )}
 
-                    <button
-                      onClick={() => handleComplete(lesson.id, i)}
-                      disabled={isDone}
-                      className={`mt-5 rounded-md px-5 py-2 text-xs font-semibold transition ${
-                        isDone
-                          ? "cursor-default bg-[var(--surface-2)] text-[var(--text-lo)]"
-                          : "bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)]"
-                      }`}
-                    >
-                      {isDone ? "Completed ✓" : i === lessons.length - 1 ? "Complete Module →" : "Complete & Continue →"}
-                    </button>
-                    {!user && (
-                      <p className="mt-3 text-xs text-[var(--text-lo)]">
-                        Signed out — progress is saved on this device only.{" "}
-                        <a href="/login" className="font-semibold text-[var(--primary)] hover:underline">
-                          Sign in
-                        </a>{" "}
-                        to sync across devices.
-                      </p>
+                    {user ? (
+                      <button
+                        onClick={() => handleComplete(lesson.id, i)}
+                        disabled={isDone}
+                        className={`mt-5 rounded-md px-5 py-2 text-xs font-semibold transition ${
+                          isDone
+                            ? "cursor-default bg-[var(--surface-2)] text-[var(--text-lo)]"
+                            : "bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)]"
+                        }`}
+                      >
+                        {isDone ? "Completed ✓" : i === lessons.length - 1 ? "Complete Module →" : "Complete & Continue →"}
+                      </button>
+                    ) : (
+                      <Link
+                        href="/login"
+                        className="mt-5 inline-block rounded-md bg-[var(--primary)] px-5 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
+                      >
+                        Sign in to complete & continue →
+                      </Link>
                     )}
                   </div>
                 )}
