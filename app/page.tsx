@@ -5,6 +5,10 @@ export default function HomePage() {
   const totalLessons = modules.reduce((n, m) => n + m.lessons.length, 0);
   const totalMinutes = modules.reduce((n, m) => n + m.estMinutes, 0);
 
+  // First module (Kinetic Basics: Login & Navigation) is a standalone prerequisite step.
+  // Everything after it belongs to the single "Kinetic Application Studio" course umbrella.
+  const [prereq, ...studioModules] = modules;
+
   return (
     <div className="space-y-16">
       <section className="hero-band relative overflow-hidden rounded-2xl px-6 py-16 text-center text-white sm:px-12">
@@ -41,42 +45,80 @@ export default function HomePage() {
       </section>
 
       <section>
-        <div className="mb-6 flex items-end justify-between">
-          <div>
-            <h2 className="text-2xl font-semibold text-[var(--text-hi)]">
-              Course outline (in order)
-            </h2>
-            <p className="mt-1 text-sm text-[var(--text-mid)]">
-              Modules are numbered and locked sequentially — no skipping ahead.
-            </p>
+        <div className="mb-6">
+          <h2 className="text-2xl font-semibold text-[var(--text-hi)]">
+            Course outline (in order)
+          </h2>
+          <p className="mt-1 text-sm text-[var(--text-mid)]">
+            One prerequisite step, then everything else lives under a single course:
+            Kinetic Application Studio. Modules unlock strictly one at a time.
+          </p>
+        </div>
+
+        {/* Step 1 — prerequisite, sits outside the Application Studio course itself */}
+        {prereq && (
+          <div className="glass-card mb-6 flex items-center gap-4 rounded-2xl p-6">
+            <span className="text-3xl">{prereq.icon}</span>
+            <div className="flex-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--primary)]">
+                Prerequisite · Module 1
+              </p>
+              <h3 className="text-lg font-semibold text-[var(--text-hi)]">{prereq.title}</h3>
+              <p className="mt-1 text-sm text-[var(--text-mid)]">{prereq.tagline}</p>
+            </div>
+            <div className="hidden shrink-0 text-right text-xs text-[var(--text-lo)] sm:block">
+              <p className="font-semibold text-[var(--text-hi)]">{prereq.lessons.length}</p>
+              <p>lessons</p>
+            </div>
           </div>
+        )}
+
+        {/* The single umbrella course — every remaining module nests under it */}
+        <div className="glass-card glow-border rounded-2xl p-6 sm:p-8">
+          <div className="flex flex-wrap items-center gap-4">
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-[var(--primary)] text-2xl text-white">
+              🧭
+            </span>
+            <div>
+              <span className="badge-pill">Main Course</span>
+              <h3 className="mt-2 text-xl font-bold text-[var(--text-hi)]">Kinetic Application Studio</h3>
+              <p className="mt-1 text-sm text-[var(--text-mid)]">
+                Modules 2–{modules.length} · Application Map, Components, Data Rules &amp; Events,
+                DataViews, Functions, and Publishing all live inside this one course.
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-6 space-y-3 border-l-2 border-[var(--border)] pl-5 sm:pl-6">
+            {studioModules.map((m, idx) => (
+              <div
+                key={m.slug}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--surface-2)] p-4"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl">{m.icon}</span>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-[var(--primary)]">
+                      Module {idx + 2} · {m.difficulty}
+                    </p>
+                    <h4 className="text-sm font-semibold text-[var(--text-hi)]">{m.title}</h4>
+                    <p className="mt-0.5 text-xs text-[var(--text-mid)]">{m.tagline}</p>
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-4 text-xs text-[var(--text-lo)]">
+                  <span>{m.lessons.length} lessons</span>
+                  <span>{m.estMinutes}m</span>
+                  <span>{m.quiz.length} quiz Qs</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-6 text-center">
           <Link href="/modules" className="text-sm font-medium text-[var(--primary)] hover:underline">
             View full course →
           </Link>
-        </div>
-        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {modules.map((m, idx) => (
-            <div
-              key={m.slug}
-              className="glass-card flex flex-col justify-between rounded-2xl p-6"
-            >
-              <div>
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="text-3xl">{m.icon}</span>
-                  <span className="badge-pill">{m.difficulty}</span>
-                </div>
-                <h3 className="text-lg font-semibold text-[var(--text-hi)]">
-                  {idx + 1}. {m.title}
-                </h3>
-                <p className="mt-2 text-sm text-[var(--text-mid)]">{m.tagline}</p>
-              </div>
-              <div className="mt-5 flex items-center justify-between text-xs text-[var(--text-lo)]">
-                <span>{m.lessons.length} lessons</span>
-                <span>{m.estMinutes} min</span>
-                <span>{m.quiz.length}-question quiz</span>
-              </div>
-            </div>
-          ))}
         </div>
       </section>
 
