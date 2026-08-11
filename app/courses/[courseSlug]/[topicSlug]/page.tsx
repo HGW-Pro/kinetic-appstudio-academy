@@ -65,7 +65,12 @@ export default function TopicPage({
   const isCertified = !!progress[topic.slug]?.completedAt;
 
   return (
-    <TopicAccessGate courseSlug={params.courseSlug} topics={course.topics} topicSlug={params.topicSlug}>
+    <TopicAccessGate
+      courseSlug={params.courseSlug}
+      topics={course.topics}
+      topicSlug={params.topicSlug}
+      requireEnrollment={false}
+    >
       <div className="space-y-8">
         <div className="glass-card glow-border rounded-2xl p-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -112,6 +117,11 @@ export default function TopicPage({
             <span className="badge-pill">{topic.quiz.length}-question assignment</span>
             {isCertified && <span className="badge-pill">🏆 Certified</span>}
           </div>
+          {!enrolled && user && (
+            <p className="mt-4 rounded-lg border border-[var(--primary)]/20 bg-[var(--primary)]/[0.05] px-4 py-3 text-xs text-[var(--text-mid)]">
+              💡 You must enroll before you can open any subtopic below or take the assignment.
+            </p>
+          )}
         </div>
 
         <div className="glass-card rounded-2xl p-6">
