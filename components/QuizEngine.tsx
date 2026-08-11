@@ -1,12 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { QuizQuestion } from "../lib/curriculum";
 import { recordQuizResult } from "../lib/progress";
 import { useAuth } from "./AuthProvider";
 import { playSound } from "../lib/sounds";
 import Confetti from "./Confetti";
+
+// Fisher-Yates shuffle — returns a new array, does not mutate the input.
+function shuffle<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+// Re-orders each question's options randomly and remaps correctIndex to match,
+// so the correct answer isn't predictably in the same position every time.
+function shuffleQuestionOptions(questions: QuizQuestion[]): QuizQuestion[] {
+  return questions.map((q) => {
+    const order = shuffle(q.options.map((_, i) => i));
+    const options = order.map((i) => q.options[i]);
+    const correctIndex = order.indexOf(q.correctIndex);
+    return { ...q, options, correctIndex };
+  });
+}
 
 export default function QuizEngine({
   moduleSlug,
@@ -20,6 +41,14 @@ export default function QuizEngine({
   nextHref?: string;
 }) {
   const { user } = useAuth();
+  const [shuffleSeed, setShuffleSeed] = useState(0);
+  // Re-shuffled once per mount, and again on every retake (via shuffleSeed).
+  const shuffledQuestions = useMemo(
+    () => shuffleQuestionOptions(questions),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [questions, shuffleSeed]
+  );
+
   const [current, setCurrent] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [locked, setLocked] = useState(false);
@@ -29,8 +58,8 @@ export default function QuizEngine({
   const [syncError, setSyncError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const q = questions[current];
-  const isLast = current === questions.length - 1;
+  const q = shuffledQuestions[current];
+  const isLast = current === shuffledQuestions.length - 1;
 
   function choose(idx: number) {
     if (locked) return;
@@ -43,7 +72,7 @@ export default function QuizEngine({
 
   async function next() {
     if (isLast) {
-      const pct = Math.round((score / questions.length) * 100);
+      const pct = Math.round((score / shuffledQuestions.length) * 100);
       setSaving(true);
       setSyncError(null);
       const { remoteWrite } = recordQuizResult(moduleSlug, pct, user?.id);
@@ -73,6 +102,7 @@ export default function QuizEngine({
 
   function retake() {
     playSound("click");
+    setShuffleSeed((s) => s + 1); // triggers a fresh shuffle of options
     setCurrent(0);
     setSelected(null);
     setLocked(false);
@@ -82,7 +112,7 @@ export default function QuizEngine({
   }
 
   if (finished) {
-    const pct = Math.round((score / questions.length) * 100);
+    const pct = Math.round((score / shuffledQuestions.length) * 100);
     const passed = pct >= 80;
     return (
       <>
@@ -93,7 +123,7 @@ export default function QuizEngine({
             {passed ? "Topic Complete!" : "Almost there"}
           </h2>
           <p className="mt-2 text-sm text-[var(--text-mid)]">
-            You scored <span className="font-semibold text-[var(--text-hi)]">{score}/{questions.length}</span> ({pct}%)
+            You scored <span className="font-semibold text-[var(--text-hi)]">{score}/{shuffledQuestions.length}</span> ({pct}%)
             on {moduleTitle}.
           </p>
           <div className="progress-track mx-auto mt-6 h-3 max-w-sm">
@@ -154,14 +184,14 @@ export default function QuizEngine({
     <div className="mx-auto max-w-xl space-y-6">
       <div className="flex items-center justify-between text-xs text-[var(--text-lo)]">
         <span>
-          Question {current + 1} of {questions.length}
+          Question {current + 1} of {shuffledQuestions.length}
         </span>
         <span>Score so far: {score}</span>
       </div>
       <div className="progress-track h-2">
         <div
           className="progress-fill h-full"
-          style={{ width: `${((current) / questions.length) * 100}%` }}
+          style={{ width: `${((current) / shuffledQuestions.length) * 100}%` }}
         />
       </div>
 
