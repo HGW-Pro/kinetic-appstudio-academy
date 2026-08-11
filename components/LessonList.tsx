@@ -7,6 +7,7 @@ import { loadLocalProgress, markLessonComplete } from "../lib/progress";
 import { useAuth } from "./AuthProvider";
 import FlowDiagramView from "./FlowDiagram";
 import VisualMockup from "./VisualMockup";
+import ImageGallery, { type LessonImage } from "./ImageGallery";
 
 function renderBody(text: string) {
   const parts = text.split(/\*\*(.*?)\*\*/g);
@@ -94,6 +95,7 @@ export default function LessonList({
           const isExpanded = expandedId === lesson.id && !isLocked;
           const isPulsing = justCompleted === lesson.id;
           const isFrontier = i === highestUnlockedIndex && !isDone;
+          const lessonImages = (lesson as unknown as { images?: LessonImage[] }).images;
 
           return (
             <div key={lesson.id} className="relative">
@@ -158,6 +160,7 @@ export default function LessonList({
                       ))}
                     </div>
 
+                    {lessonImages && lessonImages.length > 0 && <ImageGallery images={lessonImages} />}
                     {lesson.mockup && <VisualMockup mockup={lesson.mockup} />}
                     {lesson.flow && <FlowDiagramView flow={lesson.flow} />}
 
