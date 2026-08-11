@@ -8,7 +8,7 @@ import SoundToggle from "./SoundToggle";
 const links = [
   { href: "/", label: "Home" },
   { href: "/dashboard", label: "Dashboard" },
-  { href: "/modules", label: "Training Modules" },
+  { href: "/courses", label: "Courses" },
   { href: "/labs", label: "Hands-On Labs" },
 ];
 
@@ -76,7 +76,7 @@ export default function NavBar() {
             </Link>
           ) : null}
           <Link
-            href="/modules"
+            href="/courses"
             className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] sm:hidden"
           >
             Start

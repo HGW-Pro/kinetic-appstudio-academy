@@ -13,11 +13,15 @@ export default function QuizEngine({
   moduleTitle,
   questions,
   nextModuleSlug,
+  nextHref,
+  backHref,
 }: {
   moduleSlug: string;
   moduleTitle: string;
   questions: QuizQuestion[];
   nextModuleSlug?: string;
+  nextHref?: string;
+  backHref?: string;
 }) {
   const { user } = useAuth();
   const [current, setCurrent] = useState(0);
@@ -29,6 +33,8 @@ export default function QuizEngine({
 
   const q = questions[current];
   const isLast = current === questions.length - 1;
+  const resolvedNextHref = nextHref ?? (nextModuleSlug ? `/modules/${nextModuleSlug}` : undefined);
+  const resolvedBackHref = backHref ?? "/dashboard";
 
   function choose(idx: number) {
     if (locked) return;
@@ -76,7 +82,7 @@ export default function QuizEngine({
         <div className="glass-card glow-border mx-auto max-w-xl rounded-2xl p-10 text-center">
           <div className={`text-6xl ${passed ? "trophy-bounce" : ""}`}>{passed ? "🏆" : "📘"}</div>
           <h2 className="mt-4 text-2xl font-bold text-[var(--text-hi)]">
-            {passed ? "Module Complete!" : "Almost there"}
+            {passed ? "Topic Complete!" : "Almost there"}
           </h2>
           <p className="mt-2 text-sm text-[var(--text-mid)]">
             You scored <span className="font-semibold text-[var(--text-hi)]">{score}/{questions.length}</span> ({pct}%)
@@ -87,11 +93,11 @@ export default function QuizEngine({
           </div>
           {passed ? (
             <p className="mt-4 text-sm text-[var(--primary)]">
-              🎉 You earned the badge for this module. Keep the streak going!
+              🎉 You earned the badge for this topic. Keep the streak going!
             </p>
           ) : (
             <p className="mt-4 text-sm text-[var(--text-mid)]">
-              You need 80% to earn the badge. Review the lessons and try again — you've got this.
+              You need 80% to earn the badge. Review the subtopics and try again — you've got this.
             </p>
           )}
           {!user && (
@@ -110,17 +116,17 @@ export default function QuizEngine({
             >
               Retake Quiz
             </button>
-            {nextModuleSlug && passed && (
+            {resolvedNextHref && passed && (
               <Link
-                href={`/modules/${nextModuleSlug}`}
+                href={resolvedNextHref}
                 onClick={() => playSound("unlock")}
                 className="rounded-md bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
               >
-                Next Module →
+                Next Topic →
               </Link>
             )}
             <Link
-              href="/dashboard"
+              href={resolvedBackHref}
               className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
             >
               Back to Dashboard
