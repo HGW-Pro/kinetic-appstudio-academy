@@ -21,11 +21,6 @@ export type Mockup = {
   rows: MockupRow[];
 };
 
-export type LessonImage = {
-  url: string;
-  caption: string;
-};
-
 export type Lesson = {
   id: string;
   title: string;
@@ -35,7 +30,6 @@ export type Lesson = {
   version?: "2023.1" | "2023.2" | "both";
   flow?: FlowDiagram;
   mockup?: Mockup;
-  images?: LessonImage[];
 };
 
 export type QuizQuestion = {
@@ -76,9 +70,6 @@ export const modules: Module[] = [
           "Don't confuse a **layer** (a company-wide customization) with a **personalization** (a single user's private tweak). Layers can later be promoted from a personalization, so a great personal fix can become a company standard.",
           "To use Application Studio at all, your user account needs the Customize Privileges checkbox enabled in User Account Security Maintenance."
         ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/6.png", caption: "Application Studio main screen — Application Map, designers rail, layer name, and toolbar." }
-        ],
         proTip: "Press Ctrl+Alt+D from inside almost any Kinetic screen to jump straight into Application Studio for that screen.",
         version: "both",
         flow: {
@@ -99,9 +90,6 @@ export const modules: Module[] = [
           "**Method 2 — From the Application Studio Homepage:** System Management → Kinetic Application Management → Application Studio. This grid lists every base and layered application in your system, with filters for type and last-update date.",
           "When you land in Application Studio you're always on a fresh, unsaved layer. You must create a new layer or load an existing one before you can preview, save, or publish anything."
         ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/10.png", caption: "Overflow menu on any Kinetic screen — Application Studio sits near the bottom." }
-        ],
         version: "both"
       },
       {
@@ -113,10 +101,6 @@ export const modules: Module[] = [
           "Every save is stored as a **Draft**. Drafts are invisible to end users. Only a **Publish** action makes a layer selectable in Menu Maintenance so real users can see the change — and every publish is timestamped in the Publish History log.",
           "If a user opens a published layer, edits it, and saves, the edit becomes a new unpublished draft again. You must re-publish to push the change live.",
           "You can stack multiple layers on one application. Order matters: the **last** layer selected wins any conflicts, but non-conflicting changes from every layer all apply together."
-        ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/31.png", caption: "Layer Selection panel — Layer Name, CGCCode, Device Type." },
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/34.png", caption: "Create Layer and Merge Layers links on the layer list screen." }
         ],
         proTip: "Think of layer order like CSS specificity — last one loaded overrides earlier ones only where they actually collide.",
         version: "both",
@@ -141,9 +125,6 @@ export const modules: Module[] = [
           "**Data Rules** — define conditions and actions that control how fields behave (highlight, disable, hide) without any code.",
           "**Events** — wire up triggered logic: button clicks, page loads, REST calls, message boxes, and more.",
           "**DataViews** — the data plumbing layer; each view maps to one underlying data table and can define parent/child relationships, filters, and tools like Add/Delete."
-        ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/27.png", caption: "Multiple designer tabs open at once: Application Map, a page, an event, and Publish History." }
         ],
         version: "both"
       },
@@ -219,10 +200,6 @@ export const modules: Module[] = [
           "Every application has one root **Dataset** (e.g., Customer) that everything downstream binds to. A small patch icon appears next to a property whenever a Business Process Management (BPM) patch is affecting it.",
           "Key landing page properties: Name, Caption, PageType (Apps/Process/Report/Dashboard/Shared), UseFullWidth, and EpBinding — the glue that ties a UI control to a specific application view."
         ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/45.png", caption: "Application Map for Customer Entry — landing page node and rendered grid." },
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/49.png", caption: "Landing page grid properties — Ep Binding = LandingPage." }
-        ],
         version: "both"
       },
       {
@@ -233,10 +210,6 @@ export const modules: Module[] = [
           "A **Tab** is a navigation entry point tied to a Tab Page; selecting one drives what shows in the Navigation Tree below it (e.g., Details vs. Activity).",
           "A **Page** (usually PageType = TabPage) is where real layout components live — panels, grids, fields. Its EpBinding links it to a specific record context, and PageCaption can even show dynamic values like `Customer.CustID`.",
           "**Virtual Pages** are just PanelCard or PanelCardGrid components with Full Screen visualization enabled. At runtime a Full Screen button expands them to show extra containers of detail while hiding the rest of the page — great for dense data without leaving the screen."
-        ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/50.png", caption: "Customer Details page — Activity and Details tabs." },
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/53.png", caption: "Tab Data properties: Id, Title, EpBinding, Selected, Page." }
         ],
         proTip: "Deleting a Virtual Page from the Application Map simply clears the EnableFullScreen flag on its panel — nothing destructive happens to your data.",
         version: "both",
@@ -258,9 +231,6 @@ export const modules: Module[] = [
           "Sliding Panels glide in from the right edge of the screen to show contextual info, confirmations, or Info/Warning/Success/Error dialogs — triggered by an event such as a button click.",
           "Configurable properties include HideCloseIcon, ShowTitle, ShowButtons, and CollapseOnOutsideClick. You can add custom Buttons and Overflow Actions directly on the panel.",
           "**Reusable Sliding Panels** (SDK required) are entire mini-applications that any parent app can open via an app-open action, pass parameters into (ValueIn with `ParamName: DataView.Column` syntax), and receive results back from via OnOk/OnCancel handlers."
-        ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/54.png", caption: "Billing node in Application Map with the slide-out panel navigation rail." }
         ],
         version: "both"
       },
@@ -368,9 +338,6 @@ export const modules: Module[] = [
           "**Leaf controls** (Button, TextBox, ComboBox, CheckBox, DatePicker, Grid, etc.) are the actual data-entry and display elements — they cannot float free on a page; they must sit inside an organizer or host.",
           "Kinetic 2023.2 formalized **nested components**: you can drop organizer components inside other organizers to build complex side-by-side arrangements of 6, 7, or more controls in a single row."
         ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/98.png", caption: "Components Overview — Application Studio user guide, p.98." }
-        ],
         version: "both",
         flow: {
           title: "Component containment tiers",
@@ -401,10 +368,6 @@ export const modules: Module[] = [
           "PanelCardGrid gets Enable Full Screen by default — an automatic secondary view appears for grid rows that don't fit the summary card.",
           "For a PanelCard, you must enable Full Screen manually. Once enabled, a second container box appears: keep your must-see fields in the primary container, and push secondary detail fields into the second container which is only shown after clicking Full Screen.",
           "At runtime, full-screen views also appear as separate nodes in the navigation tree, so users can deep-link directly to the expanded view."
-        ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/58.png", caption: "Customer Detail panel — Enable FullScreen property checked." },
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/60.png", caption: "The same panel expanded to Full Screen at runtime, with live data." }
         ],
         version: "2023.2"
       },
@@ -512,10 +475,6 @@ export const modules: Module[] = [
           "Highlight colors follow a status convention: Red = Error, Orange = Warning, Green = Ok, Blue = Highlight — keep this consistent so users learn to read your app at a glance.",
           "System rules ship with the base app and can be copied but never edited or deleted. User-created rules can be freely copied, edited, disabled, or deleted."
         ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/21.png", caption: "Rules list — right-click context menu (Copy / Delete)." },
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/261.png", caption: "Data Rules Overview — Application Studio user guide, p.261." }
-        ],
         version: "both",
         flow: {
           title: "Condition → Action rule flow",
@@ -547,12 +506,6 @@ export const modules: Module[] = [
           "An Event is one action or a chained sequence of actions: navigate, update a field, show a message, call a REST endpoint — triggered by something in the UI (a click, a row change) or invoked from another event.",
           "Triggered events have a Trigger definition: Type (Control/Data/Event), Hook (OnClick/Before/After/Override), and Target (which component or system event to hook).",
           "You cannot edit a base-layer system event directly, but you CAN create your own event with a Before or After hook pointed at that system event's ID — your logic runs alongside it without ever touching Epicor's original workflow."
-        ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/23.png", caption: "Trigger panel: Type = Control, Hook = On Click, Target = CreditCardSaleAction." },
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/24.png", caption: "Events tree — right-click Copy / Delete." },
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/29.png", caption: "Locked (system) event flow, e.g. GetNew." },
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/30.png", caption: "Problems panel showing 2 validation errors." }
         ],
         version: "both",
         flow: {
@@ -668,10 +621,6 @@ export const modules: Module[] = [
           "Static filters use the format `DataView.Column = 'Value'` (comma-separate multiple criteria) — handy when two views share one underlying server table but need to show different subsets, like splitting Credit Memo payments by IsCreditPayment true/false.",
           "You can load data into a view four ways: GridProviderModel, a service method dataset, a BAQ Results dataset (via the ERP-BAQ event action), or a Function's response parameter of tableset type."
         ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/25.png", caption: "Views list — right-click context menu (Delete only, no Copy)." },
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/280.png", caption: "DataViews Overview — Application Studio user guide, p.280." }
-        ],
         version: "both",
         flow: {
           title: "Defining a new DataView",
@@ -693,9 +642,6 @@ export const modules: Module[] = [
           "Classic dashboards must be copied and generated as a Kinetic UX application (Tools → Deploy Dashboard) before you can style them in Application Studio — then add them to the main menu through Menu Maintenance.",
           "Once generated, a Kinetic dashboard is just another application layer — resize panels, rename captions, add view options to grids, exactly like any other screen."
         ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/302.png", caption: "Widgets Overview — Application Studio user guide, p.302." }
-        ],
         version: "both"
       },
       {
@@ -708,12 +654,6 @@ export const modules: Module[] = [
           "3) Drop a slider-open action into the event workflow and set its Page parameter to your sliding panel's ID.",
           "4) Save, then Preview — clicking the button should slide the panel out from the right immediately.",
           "This exact recipe — button → event → slider-open action — is reused everywhere in Kinetic. A real example from Customer Entry: the 'Change ID' button has ActionData Id = Customer.ChgIDButton, and its (Locked, system) event flow is exactly Control:Customer.ChgIDButton onClick → row-update → slider-open, opening the 'Change Customer ID' panel."
-        ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/64.png", caption: "Change ID button — Action Data properties." },
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/65.png", caption: "Its event flow: Control onClick → row-update → slider-open." },
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/61.png", caption: "The resulting 'Change Customer ID' sliding panel at runtime." },
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/66.png", caption: "Live Kinetic runtime — Customer ADDISON with Get Territory / Change ID buttons." }
         ],
         version: "both",
         flow: {
@@ -806,9 +746,6 @@ export const modules: Module[] = [
           "**Dashboard Developer** rights let you modify base dashboards; **Customize Privileges** rights let you create new layers/alternate versions of existing apps. An SDK license unlocks creating brand-new applications from templates (Apps, Configurator, Dashboard, Process, Report, Shared).",
           "2023.2 adds a clear visual indicator distinguishing system apps (ticked) from custom apps (no indicator) directly in the Homepage grid — much faster triage across a large system."
         ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/26.png", caption: "Publish History table — User, Published Date/Time, Description." }
-        ],
         version: "both"
       },
       {
@@ -840,9 +777,6 @@ export const modules: Module[] = [
           "It reliably converts simple UI components, combo boxes, foreign-key dataviews, sub-table dataviews, and wizard-generated data rules. It cannot convert custom actions/conditions in Data Rules or client-side logic based on custom code — that logic must be rebuilt using Functions and BPM directives on the server.",
           "Always verify converted layers in the Configuration Upgrade Dashboard: Pass (verify only), Warning (needs edits), or Error (needs a full rework)."
         ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/93.png", caption: "Upgrade Conversion Process overview — Application Studio user guide, p.93." }
-        ],
         version: "both",
         flow: {
           title: "Conversion verification funnel",
@@ -873,9 +807,6 @@ export const modules: Module[] = [
           "With the SDK, the **UD Service Designer** lets you create brand-new user-defined services/tables, add fields, and deploy them as full Kinetic screens with their own base events — genuinely building new functionality, not just customizing existing screens.",
           "Typical flow: define UD codes → add a UD field to a core table (e.g., Part) → regenerate the data model → surface the new field in the UI via a ComboBox or panel → deploy the layer.",
           "This is the deepest level of App Studio work — pair it with Functions and BPM Directives for validation and cross-system integration logic, exactly the kind of stack you already work with in Epicor."
-        ],
-        images: [
-          { url: "https://bcrovxnarohytinnqkrp.supabase.co/storage/v1/object/public/KineticUI/443.png", caption: "Introduction to User-Defined (UD) Forms — Application Studio user guide, p.443." }
         ],
         version: "both",
         flow: {

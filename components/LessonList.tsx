@@ -6,7 +6,6 @@ import { loadLocalProgress, markLessonComplete } from "../lib/progress";
 import { useAuth } from "./AuthProvider";
 import FlowDiagramView from "./FlowDiagram";
 import VisualMockup from "./VisualMockup";
-import ImageGallery from "./ImageGallery";
 
 function renderBody(text: string) {
   const parts = text.split(/\*\*(.*?)\*\*/g);
@@ -136,9 +135,6 @@ export default function LessonList({
                       ))}
                     </div>
 
-                    {lesson.images && lesson.images.length > 0 && (
-                      <ImageGallery images={lesson.images} />
-                    )}
                     {lesson.mockup && <VisualMockup mockup={lesson.mockup} />}
                     {lesson.flow && <FlowDiagramView flow={lesson.flow} />}
 
