@@ -12,16 +12,12 @@ export default function QuizEngine({
   moduleSlug,
   moduleTitle,
   questions,
-  nextModuleSlug,
   nextHref,
-  backHref = "/dashboard",
 }: {
   moduleSlug: string;
   moduleTitle: string;
   questions: QuizQuestion[];
-  nextModuleSlug?: string;
   nextHref?: string;
-  backHref?: string;
 }) {
   const { user } = useAuth();
   const [current, setCurrent] = useState(0);
@@ -33,7 +29,6 @@ export default function QuizEngine({
 
   const q = questions[current];
   const isLast = current === questions.length - 1;
-  const resolvedNextHref = nextHref ?? (nextModuleSlug ? `/modules/${nextModuleSlug}` : undefined);
 
   function choose(idx: number) {
     if (locked) return;
@@ -115,9 +110,9 @@ export default function QuizEngine({
             >
               Retake Quiz
             </button>
-            {resolvedNextHref && passed && (
+            {nextHref && passed && (
               <Link
-                href={resolvedNextHref}
+                href={nextHref}
                 onClick={() => playSound("unlock")}
                 className="rounded-md bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
               >
@@ -125,7 +120,7 @@ export default function QuizEngine({
               </Link>
             )}
             <Link
-              href={backHref}
+              href="/dashboard"
               className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
             >
               Back to Dashboard

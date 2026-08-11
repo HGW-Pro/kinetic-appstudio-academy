@@ -4,16 +4,16 @@ import { courses } from "../lib/courses";
 export default function HomePage() {
   return (
     <div className="space-y-12">
-      <section className="hero-band relative overflow-hidden rounded-2xl px-6 py-14 text-center text-white sm:px-12">
+      <section className="hero-band relative overflow-hidden rounded-2xl px-6 py-16 text-center text-white sm:px-12">
         <span className="mx-auto mb-6 flex w-fit items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide">
-          🎓 Internal Training Catalog
+          🎓 Employee Training Catalog
         </span>
         <h1 className="mx-auto max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-          Epicor Training Catalog
+          Internal Certification Courses
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-base text-white/85 sm:text-lg">
-          Pick a course below. Every course is a strict, sequential path — topics and their
-          subtopics unlock one at a time as you complete and pass each assignment.
+          Every course below is fully sequential: complete each Topic's subtopics in order to
+          unlock the next, and pass a Topic's assignment to move on. No skipping ahead.
         </p>
       </section>
 
@@ -21,42 +21,40 @@ export default function HomePage() {
         <h2 className="mb-6 text-2xl font-semibold text-[var(--text-hi)]">Available Courses</h2>
         <div className="grid gap-6 sm:grid-cols-2">
           {courses.map((course) => {
-            const comingSoon = course.status === "coming-soon";
             const totalSubtopics = course.topics.reduce((n, t) => n + t.lessons.length, 0);
-            const totalMinutes = course.topics.reduce((n, t) => n + t.estMinutes, 0);
-
-            const card = (
-              <div
-                className={`glass-card flex h-full flex-col justify-between rounded-2xl p-7 transition ${
-                  comingSoon ? "opacity-60" : "hover:-translate-y-1 hover:shadow-lg"
-                }`}
+            const totalQuizQs = course.topics.reduce((n, t) => n + t.quiz.length, 0);
+            return (
+              <Link
+                key={course.slug}
+                href={`/courses/${course.slug}`}
+                className="group glass-card glow-border flex flex-col justify-between rounded-2xl p-8 transition hover:-translate-y-1 hover:shadow-lg"
               >
                 <div>
-                  <div className="mb-4 flex items-center justify-between">
-                    <span className="flex h-14 w-14 items-center justify-center rounded-xl bg-[var(--primary)] text-2xl text-white">
-                      {course.icon}
-                    </span>
-                    <span className="badge-pill">{comingSoon ? "Coming Soon" : "Available"}</span>
-                  </div>
-                  <h3 className="text-xl font-bold text-[var(--text-hi)]">{course.title}</h3>
+                  <span className="flex h-14 w-14 items-center justify-center rounded-xl bg-[var(--primary)] text-2xl text-white">
+                    {course.icon}
+                  </span>
+                  <h3 className="mt-4 text-xl font-bold text-[var(--text-hi)] group-hover:text-[var(--primary)]">
+                    {course.title}
+                  </h3>
                   <p className="mt-2 text-sm text-[var(--text-mid)]">{course.tagline}</p>
                 </div>
                 <div className="mt-6 flex items-center justify-between text-xs text-[var(--text-lo)]">
                   <span>{course.topics.length} topics</span>
                   <span>{totalSubtopics} subtopics</span>
-                  <span>{totalMinutes}m total</span>
+                  <span>{totalQuizQs} quiz Qs</span>
+                  <span className="text-[var(--primary)] transition group-hover:translate-x-1">→</span>
                 </div>
-              </div>
-            );
-
-            return comingSoon ? (
-              <div key={course.slug}>{card}</div>
-            ) : (
-              <Link key={course.slug} href={`/courses/${course.slug}`}>
-                {card}
               </Link>
             );
           })}
+
+          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[var(--border-strong)] p-8 text-center opacity-70">
+            <span className="text-3xl">➕</span>
+            <p className="mt-3 text-sm font-semibold text-[var(--text-hi)]">More courses coming soon</p>
+            <p className="mt-1 text-xs text-[var(--text-mid)]">
+              e.g. "BAQ to Updatable BAQ" — new courses plug into this same catalog.
+            </p>
+          </div>
         </div>
       </section>
 

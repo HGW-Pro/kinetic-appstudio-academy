@@ -6,7 +6,7 @@ import { useAuth } from "./AuthProvider";
 import SoundToggle from "./SoundToggle";
 
 const links = [
-  { href: "/", label: "Course Catalog" },
+  { href: "/", label: "Courses" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/courses/kinetic-application-studio", label: "Kinetic App Studio" },
   { href: "/labs", label: "Hands-On Labs" },

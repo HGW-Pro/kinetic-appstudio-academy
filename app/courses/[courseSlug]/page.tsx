@@ -7,7 +7,7 @@ import { getCourse } from "../../../lib/courses";
 import { useAuth } from "../../../components/AuthProvider";
 import { loadLocalProgress, loadRemoteProgress, type ProgressState } from "../../../lib/progress";
 
-export default function CourseTopicsPage({ params }: { params: { courseSlug: string } }) {
+export default function CoursePage({ params }: { params: { courseSlug: string } }) {
   const course = getCourse(params.courseSlug);
   if (!course) notFound();
 
@@ -24,29 +24,32 @@ export default function CourseTopicsPage({ params }: { params: { courseSlug: str
     })();
   }, [user, authLoading]);
 
-  const topics = course.topics;
   const highestUnlocked = (() => {
     if (!user) return 0;
     let idx = 0;
-    for (let i = 0; i < topics.length; i++) {
-      if (progress[topics[i].slug]?.completedAt) idx = i + 1;
-      else break;
+    for (let i = 0; i < course.topics.length; i++) {
+      if (progress[course.topics[i].slug]?.completedAt) {
+        idx = i + 1;
+      } else {
+        break;
+      }
     }
-    return Math.min(idx, Math.max(topics.length - 1, 0));
+    return Math.min(idx, course.topics.length - 1);
   })();
 
   return (
     <div className="space-y-8">
       <div>
-        <span className="badge-pill">
-          {course.icon} Course · {topics.length} Topics
-        </span>
+        <span className="badge-pill">{course.icon} Course</span>
         <h1 className="mt-4 text-3xl font-bold text-[var(--text-hi)]">{course.title}</h1>
         <p className="mt-2 max-w-2xl text-sm text-[var(--text-mid)]">{course.tagline}</p>
+        <p className="mt-1 text-xs text-[var(--text-lo)]">
+          Topics unlock strictly in order — complete a topic's assignment to move to the next.
+        </p>
       </div>
 
       <div className="space-y-4">
-        {topics.map((t, idx) => {
+        {course.topics.map((t, idx) => {
           const isCertified = !!progress[t.slug]?.completedAt;
           const isLocked = ready && (!user ? idx > 0 : idx > highestUnlocked);
           const card = (
@@ -96,23 +99,16 @@ export default function CourseTopicsPage({ params }: { params: { courseSlug: str
               </div>
             </div>
           );
-
           return isLocked ? (
             <div key={t.slug} className="cursor-not-allowed">
               {card}
             </div>
           ) : (
-            <Link key={t.slug} href={`/courses/${course.slug}/${t.slug}`}>
+            <Link key={t.slug} href={`/courses/${params.courseSlug}/${t.slug}`}>
               {card}
             </Link>
           );
         })}
-      </div>
-
-      <div className="text-center">
-        <Link href="/" className="text-sm font-medium text-[var(--primary)] hover:underline">
-          ← Back to Course Catalog
-        </Link>
       </div>
     </div>
   );

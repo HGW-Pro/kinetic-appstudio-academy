@@ -4,19 +4,16 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "./AuthProvider";
 import { loadRemoteProgress } from "../lib/progress";
-import { getCourse } from "../lib/courses";
+import type { Module } from "../lib/curriculum";
 
-/**
- * Course-aware sequential lock. A topic (Module) at index N is locked until
- * the topic at index N-1 has been passed (quiz score >= 80%, i.e. completedAt
- * is set). Signed-out visitors can only ever preview topic 0.
- */
 export default function TopicAccessGate({
   courseSlug,
+  topics,
   topicSlug,
   children,
 }: {
   courseSlug: string;
+  topics: Module[];
   topicSlug: string;
   children: React.ReactNode;
 }) {
@@ -29,8 +26,6 @@ export default function TopicAccessGate({
     if (authLoading) return;
     let cancelled = false;
     (async () => {
-      const course = getCourse(courseSlug);
-      const topics = course?.topics ?? [];
       const idx = topics.findIndex((t) => t.slug === topicSlug);
       let lock = false;
       let blocker = "";
@@ -58,7 +53,7 @@ export default function TopicAccessGate({
     return () => {
       cancelled = true;
     };
-  }, [user, authLoading, courseSlug, topicSlug]);
+  }, [user, authLoading, topicSlug, topics]);
 
   if (!checked) return null;
 
@@ -77,7 +72,7 @@ export default function TopicAccessGate({
             href={`/courses/${courseSlug}`}
             className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
           >
-            ← Back to Course Topics
+            ← Back to Course
           </Link>
           {!user && (
             <Link

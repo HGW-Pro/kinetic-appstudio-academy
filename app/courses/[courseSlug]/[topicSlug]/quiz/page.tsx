@@ -3,9 +3,9 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCourse } from "../../../../../lib/courses";
+import { getCourse, getTopic } from "../../../../../lib/courses";
 import QuizEngine from "../../../../../components/QuizEngine";
-import ModuleAccessGate from "../../../../../components/ModuleAccessGate";
+import TopicAccessGate from "../../../../../components/TopicAccessGate";
 import { useAuth } from "../../../../../components/AuthProvider";
 import { loadRemoteProgress } from "../../../../../lib/progress";
 
@@ -16,15 +16,15 @@ export default function TopicQuizPage({
 }) {
   const course = getCourse(params.courseSlug);
   if (!course) notFound();
-  const topic = course.topics.find((t) => t.slug === params.topicSlug);
+  const topic = getTopic(params.courseSlug, params.topicSlug);
   if (!topic) notFound();
 
   const { user, loading: authLoading } = useAuth();
   const [checked, setChecked] = useState(false);
-  const [lessonsIncomplete, setLessonsIncomplete] = useState(false);
+  const [subtopicsIncomplete, setSubtopicsIncomplete] = useState(false);
 
   const idx = course.topics.findIndex((t) => t.slug === topic.slug);
-  const next = course.topics[idx + 1];
+  const nextTopic = course.topics[idx + 1];
 
   useEffect(() => {
     if (authLoading || !user) {
@@ -34,7 +34,7 @@ export default function TopicQuizPage({
     (async () => {
       const progress = await loadRemoteProgress(user.id);
       const done = progress[topic.slug]?.lessonsCompleted.length ?? 0;
-      setLessonsIncomplete(done < topic.lessons.length);
+      setSubtopicsIncomplete(done < topic.lessons.length);
       setChecked(true);
     })();
   }, [user, authLoading, topic.slug, topic.lessons.length]);
@@ -55,7 +55,7 @@ export default function TopicQuizPage({
             Sign In
           </Link>
           <Link
-            href={`/courses/${course.slug}/${topic.slug}`}
+            href={`/courses/${params.courseSlug}/${params.topicSlug}`}
             className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
           >
             ← Back to Topic
@@ -66,8 +66,8 @@ export default function TopicQuizPage({
   }
 
   return (
-    <ModuleAccessGate moduleSlug={topic.slug}>
-      {checked && lessonsIncomplete ? (
+    <TopicAccessGate courseSlug={params.courseSlug} topics={course.topics} topicSlug={params.topicSlug}>
+      {checked && subtopicsIncomplete ? (
         <div className="glass-card glow-border mx-auto max-w-lg rounded-2xl p-10 text-center">
           <div className="text-5xl">📘</div>
           <h1 className="mt-4 text-xl font-bold text-[var(--text-hi)]">Finish the subtopics first</h1>
@@ -75,10 +75,10 @@ export default function TopicQuizPage({
             Complete every subtopic in this topic before taking the assignment.
           </p>
           <Link
-            href={`/courses/${course.slug}/${topic.slug}`}
+            href={`/courses/${params.courseSlug}/${params.topicSlug}`}
             className="mt-6 inline-block rounded-md bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
           >
-            ← Back to Subtopics
+            ← Back to Topic
           </Link>
         </div>
       ) : (
@@ -96,11 +96,10 @@ export default function TopicQuizPage({
             moduleSlug={topic.slug}
             moduleTitle={topic.title}
             questions={topic.quiz}
-            nextHref={next ? `/courses/${course.slug}/${next.slug}` : undefined}
-            backHref={`/courses/${course.slug}`}
+            nextHref={nextTopic ? `/courses/${params.courseSlug}/${nextTopic.slug}` : undefined}
           />
         </div>
       )}
-    </ModuleAccessGate>
+    </TopicAccessGate>
   );
 }

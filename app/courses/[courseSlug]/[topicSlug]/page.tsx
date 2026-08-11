@@ -1,13 +1,17 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { useEffect, useState } from "react";
-import { getCourse } from "../../../../lib/courses";
-import SubtopicPlayer from "../../../../components/SubtopicPlayer";
-import ModuleAccessGate from "../../../../components/ModuleAccessGate";
+import { getCourse, getTopic } from "../../../../lib/courses";
+import TopicAccessGate from "../../../../components/TopicAccessGate";
 import { useAuth } from "../../../../components/AuthProvider";
-import { enrollInModule } from "../../../../lib/progress";
+import {
+  loadLocalProgress,
+  loadRemoteProgress,
+  enrollInModule,
+  type ProgressState,
+} from "../../../../lib/progress";
 
 export default function TopicPage({
   params,
@@ -16,20 +20,27 @@ export default function TopicPage({
 }) {
   const course = getCourse(params.courseSlug);
   if (!course) notFound();
-  const topic = course.topics.find((t) => t.slug === params.topicSlug);
+  const topic = getTopic(params.courseSlug, params.topicSlug);
   if (!topic) notFound();
 
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
+  const [progress, setProgress] = useState<ProgressState>({});
+  const [ready, setReady] = useState(false);
   const [enrolled, setEnrolled] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
 
   const idx = course.topics.findIndex((t) => t.slug === topic.slug);
-  const prev = course.topics[idx - 1];
-  const next = course.topics[idx + 1];
+  const prevTopic = course.topics[idx - 1];
+  const nextTopic = course.topics[idx + 1];
 
   useEffect(() => {
-    setEnrolled(false);
-  }, [topic.slug]);
+    if (authLoading) return;
+    (async () => {
+      const p = user ? await loadRemoteProgress(user.id) : loadLocalProgress();
+      setProgress(p);
+      setReady(true);
+    })();
+  }, [user, authLoading, topic.slug]);
 
   async function handleEnroll() {
     if (!user) return;
@@ -39,16 +50,23 @@ export default function TopicPage({
     setEnrolled(true);
   }
 
+  const doneIds = progress[topic.slug]?.lessonsCompleted ?? [];
+  const highestUnlocked = user ? Math.min(doneIds.length, topic.lessons.length - 1) : 0;
+  const firstIncomplete =
+    topic.lessons.find((l) => !doneIds.includes(l.id)) ?? topic.lessons[topic.lessons.length - 1];
+  const allDone = doneIds.length >= topic.lessons.length;
+  const isCertified = !!progress[topic.slug]?.completedAt;
+
   return (
-    <ModuleAccessGate moduleSlug={topic.slug}>
-      <div className="space-y-10">
+    <TopicAccessGate courseSlug={params.courseSlug} topics={course.topics} topicSlug={params.topicSlug}>
+      <div className="space-y-8">
         <div className="glass-card glow-border rounded-2xl p-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <span className="text-4xl">{topic.icon}</span>
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wide text-[var(--primary)]">
-                  {course.title} · Topic {idx + 1} of {course.topics.length} · {topic.difficulty}
+                  Topic {idx + 1} of {course.topics.length} · {topic.difficulty}
                 </p>
                 <h1 className="text-2xl font-bold text-[var(--text-hi)] sm:text-3xl">{topic.title}</h1>
               </div>
@@ -80,50 +98,105 @@ export default function TopicPage({
             <span className="badge-pill">{topic.lessons.length} subtopics</span>
             <span className="badge-pill">{topic.estMinutes} min</span>
             <span className="badge-pill">{topic.quiz.length}-question assignment</span>
+            {isCertified && <span className="badge-pill">🏆 Certified</span>}
           </div>
         </div>
 
-        <SubtopicPlayer topicSlug={topic.slug} lessons={topic.lessons} />
-
-        <div className="glass-card rounded-2xl p-6 text-center">
-          <h2 className="text-lg font-semibold text-[var(--text-hi)]">
-            Ready to test your knowledge?
+        <div className="glass-card rounded-2xl p-6">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-[var(--primary)]">
+            Subtopics
           </h2>
-          <p className="mt-1 text-sm text-[var(--text-mid)]">
-            Score 80% or higher on the {topic.quiz.length}-question assignment to earn this topic's
-            badge and unlock the next one.
-          </p>
+          <div className="space-y-2">
+            {topic.lessons.map((l, i) => {
+              const done = doneIds.includes(l.id);
+              const locked = ready && i > highestUnlocked;
+              const row = (
+                <div
+                  className={`flex items-center justify-between rounded-lg border px-4 py-3 transition ${
+                    locked
+                      ? "border-[var(--border)] bg-[var(--surface-2)] opacity-60"
+                      : "border-[var(--border-strong)] bg-[var(--surface)] hover:bg-[var(--surface-2)]"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                        done
+                          ? "bg-gradient-to-br from-[var(--primary)] to-[var(--primary-light)] text-white"
+                          : locked
+                          ? "bg-[var(--surface-3)] text-[var(--text-lo)]"
+                          : "border border-[var(--primary)] text-[var(--primary)]"
+                      }`}
+                    >
+                      {done ? "✓" : locked ? "🔒" : i + 1}
+                    </span>
+                    <span className="text-sm font-medium text-[var(--text-hi)]">{l.title}</span>
+                  </div>
+                  <span className="text-xs text-[var(--text-lo)]">{l.minutes} min</span>
+                </div>
+              );
+              return locked ? (
+                <div key={l.id}>{row}</div>
+              ) : (
+                <Link key={l.id} href={`/courses/${params.courseSlug}/${params.topicSlug}/${l.id}`}>
+                  {row}
+                </Link>
+              );
+            })}
+          </div>
+
           <Link
-            href={`/courses/${course.slug}/${topic.slug}/quiz`}
+            href={`/courses/${params.courseSlug}/${params.topicSlug}/${firstIncomplete.id}`}
             className="mt-5 inline-block rounded-md bg-[var(--primary)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
           >
-            Take the Assignment →
+            {doneIds.length === 0 ? "Start Topic →" : allDone ? "Review Subtopics →" : "Continue Learning →"}
           </Link>
         </div>
 
-        <div className="flex items-center justify-between text-sm">
-          {prev ? (
+        <div className="glass-card rounded-2xl p-6 text-center">
+          <h2 className="text-lg font-semibold text-[var(--text-hi)]">Ready to test your knowledge?</h2>
+          <p className="mt-1 text-sm text-[var(--text-mid)]">
+            {allDone
+              ? `Score 80%+ on the ${topic.quiz.length}-question assignment to earn this topic's badge and unlock the next.`
+              : "Finish every subtopic above first."}
+          </p>
+          {allDone ? (
             <Link
-              href={`/courses/${course.slug}/${prev.slug}`}
+              href={`/courses/${params.courseSlug}/${params.topicSlug}/quiz`}
+              className="mt-5 inline-block rounded-md bg-[var(--primary)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
+            >
+              Take the Assignment →
+            </Link>
+          ) : (
+            <span className="mt-5 inline-block rounded-md bg-[var(--surface-2)] px-6 py-3 text-sm font-semibold text-[var(--text-lo)]">
+              Locked
+            </span>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between text-sm">
+          {prevTopic ? (
+            <Link
+              href={`/courses/${params.courseSlug}/${prevTopic.slug}`}
               className="text-[var(--text-mid)] hover:text-[var(--primary)]"
             >
-              ← {prev.title}
+              ← {prevTopic.title}
             </Link>
           ) : (
             <span />
           )}
-          {next ? (
+          {nextTopic ? (
             <Link
-              href={`/courses/${course.slug}/${next.slug}`}
+              href={`/courses/${params.courseSlug}/${nextTopic.slug}`}
               className="text-[var(--text-mid)] hover:text-[var(--primary)]"
             >
-              {next.title} →
+              {nextTopic.title} →
             </Link>
           ) : (
             <span />
           )}
         </div>
       </div>
-    </ModuleAccessGate>
+    </TopicAccessGate>
   );
 }

@@ -90,7 +90,7 @@ export default function QuizPage({ params }: { params: { slug: string } }) {
             moduleSlug={mod.slug}
             moduleTitle={mod.title}
             questions={mod.quiz}
-            nextModuleSlug={next?.slug}
+            nextHref={next ? `/modules/${next.slug}` : undefined}
           />
         </div>
       )}
