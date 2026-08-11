@@ -21,11 +21,11 @@ export default function ModuleDetailPage({
 
   return (
     <div className="space-y-10">
-      <div className="glass-card glow-border rounded-3xl p-8">
+      <div className="glass-card glow-border rounded-2xl p-8">
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-4xl">{mod.icon}</span>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent-2)]">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--primary)]">
               Module {idx + 1} of {modules.length} · {mod.difficulty}
             </p>
             <h1 className="text-2xl font-bold text-[var(--text-hi)] sm:text-3xl">{mod.title}</h1>
@@ -50,7 +50,7 @@ export default function ModuleDetailPage({
         </p>
         <Link
           href={`/modules/${mod.slug}/quiz`}
-          className="mt-5 inline-block rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--accent)]/30 transition hover:scale-[1.02]"
+          className="mt-5 inline-block rounded-md bg-[var(--primary)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
         >
           Take the Assignment →
         </Link>
@@ -58,14 +58,14 @@ export default function ModuleDetailPage({
 
       <div className="flex items-center justify-between text-sm">
         {prev ? (
-          <Link href={`/modules/${prev.slug}`} className="text-[var(--text-mid)] hover:text-[var(--accent-2)]">
+          <Link href={`/modules/${prev.slug}`} className="text-[var(--text-mid)] hover:text-[var(--primary)]">
             ← {prev.title}
           </Link>
         ) : (
           <span />
         )}
         {next ? (
-          <Link href={`/modules/${next.slug}`} className="text-[var(--text-mid)] hover:text-[var(--accent-2)]">
+          <Link href={`/modules/${next.slug}`} className="text-[var(--text-mid)] hover:text-[var(--primary)]">
             {next.title} →
           </Link>
         ) : (

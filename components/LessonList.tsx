@@ -34,8 +34,6 @@ export default function LessonList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moduleSlug]);
 
-  const activeIndex = lessons.findIndex((l) => l.id === activeId);
-
   function handleComplete(lessonId: string) {
     markLessonComplete(moduleSlug, lessonId);
     setCompleted((prev) => (prev.includes(lessonId) ? prev : [...prev, lessonId]));
@@ -57,9 +55,9 @@ export default function LessonList({
     <div className="relative">
       {/* Vertical progress spine */}
       <div className="pointer-events-none absolute bottom-6 left-[23px] top-6 hidden w-[3px] sm:block">
-        <div className="h-full w-full rounded-full bg-white/[0.06]" />
+        <div className="h-full w-full rounded-full bg-[var(--surface-3)]" />
         <div
-          className="absolute left-0 top-0 w-full rounded-full bg-gradient-to-b from-[var(--accent)] to-[var(--accent-2)] transition-all duration-700 ease-out"
+          className="absolute left-0 top-0 w-full rounded-full bg-gradient-to-b from-[var(--primary)] to-[var(--primary-light)] transition-all duration-700 ease-out"
           style={{ height: `${Math.min(pathPct, 100)}%` }}
         />
       </div>
@@ -77,18 +75,18 @@ export default function LessonList({
               <span
                 className={`absolute -left-14 top-6 hidden h-12 w-12 items-center justify-center rounded-full border-2 text-sm font-bold transition-all duration-500 sm:flex ${
                   isDone
-                    ? "border-[var(--accent-2)] bg-gradient-to-br from-[var(--accent)] to-[var(--accent-2)] text-white"
+                    ? "border-[var(--primary-light)] bg-gradient-to-br from-[var(--primary)] to-[var(--primary-light)] text-white"
                     : isActive
-                    ? "border-[var(--accent)] bg-[var(--bg-1)] text-[var(--accent-2)] node-glow"
-                    : "border-white/10 bg-[var(--bg-1)] text-[var(--text-lo)]"
+                    ? "border-[var(--primary)] bg-[var(--surface)] text-[var(--primary)] node-glow"
+                    : "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-lo)]"
                 } ${isPulsing ? "node-pop" : ""}`}
               >
                 {isDone ? "✓" : isLocked ? "🔒" : i + 1}
               </span>
 
               <div
-                className={`glass-card overflow-hidden rounded-2xl transition-all duration-300 ${
-                  isLocked ? "opacity-50" : "opacity-100"
+                className={`glass-card overflow-hidden rounded-xl transition-all duration-300 ${
+                  isLocked ? "opacity-60" : "opacity-100"
                 } ${isActive ? "glow-border" : ""}`}
               >
                 <button
@@ -102,8 +100,8 @@ export default function LessonList({
                     <span
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
                         isDone
-                          ? "bg-gradient-to-br from-[var(--accent)] to-[var(--accent-2)] text-white"
-                          : "bg-white/5 text-[var(--text-lo)]"
+                          ? "bg-gradient-to-br from-[var(--primary)] to-[var(--primary-light)] text-white"
+                          : "bg-[var(--surface-2)] text-[var(--text-lo)]"
                       }`}
                     >
                       {isDone ? "✓" : isLocked ? "🔒" : i + 1}
@@ -125,7 +123,7 @@ export default function LessonList({
                 </button>
 
                 {isActive && !isLocked && (
-                  <div className="border-t border-white/5 px-6 py-5">
+                  <div className="border-t border-[var(--border)] px-6 py-5">
                     <div className="prose-lesson">
                       {lesson.body.map((p, idx) => (
                         <p key={idx}>{renderBody(p)}</p>
@@ -135,8 +133,8 @@ export default function LessonList({
                     {lesson.flow && <FlowDiagramView flow={lesson.flow} />}
 
                     {lesson.proTip && (
-                      <div className="mt-4 rounded-xl border border-[var(--accent-2)]/25 bg-[var(--accent-2)]/5 px-4 py-3 text-sm text-[var(--text-mid)]">
-                        <span className="mr-2 font-semibold text-[var(--accent-2)]">💡 Pro tip:</span>
+                      <div className="mt-4 rounded-lg border border-[var(--primary)]/20 bg-[var(--primary)]/[0.05] px-4 py-3 text-sm text-[var(--text-mid)]">
+                        <span className="mr-2 font-semibold text-[var(--primary)]">💡 Pro tip:</span>
                         {lesson.proTip}
                       </div>
                     )}
@@ -144,10 +142,10 @@ export default function LessonList({
                     <button
                       onClick={() => handleComplete(lesson.id)}
                       disabled={isDone}
-                      className={`mt-5 rounded-full px-5 py-2 text-xs font-semibold transition ${
+                      className={`mt-5 rounded-md px-5 py-2 text-xs font-semibold transition ${
                         isDone
-                          ? "cursor-default bg-white/5 text-[var(--text-lo)]"
-                          : "bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] text-white hover:scale-[1.02]"
+                          ? "cursor-default bg-[var(--surface-2)] text-[var(--text-lo)]"
+                          : "bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)]"
                       }`}
                     >
                       {isDone ? "Completed ✓" : i === lessons.length - 1 ? "Complete Module →" : "Complete & Continue →"}

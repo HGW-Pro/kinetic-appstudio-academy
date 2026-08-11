@@ -13,22 +13,22 @@ export default function ModulesPage() {
         </p>
       </div>
 
-      <div className="space-y-5">
+      <div className="space-y-4">
         {modules.map((m, idx) => (
           <Link
             key={m.slug}
             href={`/modules/${m.slug}`}
-            className="group glass-card flex flex-col gap-4 rounded-2xl p-6 transition hover:-translate-y-0.5 hover:shadow-xl hover:shadow-[var(--accent)]/10 sm:flex-row sm:items-center sm:justify-between"
+            className="group glass-card flex flex-col gap-4 rounded-xl p-6 transition hover:-translate-y-0.5 hover:shadow-md sm:flex-row sm:items-center sm:justify-between"
           >
             <div className="flex items-start gap-4">
-              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white/5 text-2xl">
+              <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-[var(--surface-2)] text-2xl">
                 {m.icon}
               </span>
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent-2)]">
+                <p className="text-xs font-semibold uppercase tracking-wide text-[var(--primary)]">
                   Module {idx + 1} · {m.difficulty}
                 </p>
-                <h2 className="mt-1 text-lg font-semibold text-[var(--text-hi)] group-hover:text-[var(--accent-2)]">
+                <h2 className="mt-1 text-lg font-semibold text-[var(--text-hi)] group-hover:text-[var(--primary)]">
                   {m.title}
                 </h2>
                 <p className="mt-1 text-sm text-[var(--text-mid)]">{m.tagline}</p>
@@ -47,7 +47,7 @@ export default function ModulesPage() {
                 <p className="text-sm font-semibold text-[var(--text-hi)]">{m.quiz.length}</p>
                 <p>quiz Qs</p>
               </div>
-              <span className="text-lg text-[var(--text-lo)] transition group-hover:translate-x-1 group-hover:text-[var(--accent-2)]">
+              <span className="text-lg text-[var(--text-lo)] transition group-hover:translate-x-1 group-hover:text-[var(--primary)]">
                 →
               </span>
             </div>

@@ -26,16 +26,16 @@ export default function FlowDiagramView({ flow }: { flow: FlowDiagram }) {
   return (
     <div
       ref={ref}
-      className="my-5 overflow-hidden rounded-2xl border border-[var(--accent-2)]/20 bg-[var(--accent-2)]/[0.04] p-5"
+      className="my-5 overflow-hidden rounded-xl border border-[var(--primary)]/20 bg-[var(--primary)]/[0.035] p-5"
     >
-      <p className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--accent-2)]">
+      <p className="mb-4 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-[var(--primary)]">
         <span className="text-base">🔀</span> {flow.title}
       </p>
       <div className="flex flex-col items-stretch gap-0 sm:flex-row sm:items-center sm:gap-0">
         {flow.steps.map((step, i) => (
           <div key={i} className="flex flex-1 items-center gap-0 sm:flex-row">
             <div
-              className={`flow-node w-full rounded-xl border px-4 py-3 text-center transition-all duration-500 ${
+              className={`flow-node w-full rounded-lg border px-4 py-3 text-center shadow-sm transition-all duration-500 ${
                 visible ? "flow-node-in" : "opacity-0 translate-y-2"
               }`}
               style={{ transitionDelay: `${i * 160}ms` }}
@@ -52,12 +52,7 @@ export default function FlowDiagramView({ flow }: { flow: FlowDiagram }) {
                 }`}
                 style={{ transitionDelay: `${i * 160 + 80}ms` }}
               >
-                {/* horizontal arrow for desktop */}
-                <svg
-                  className="hidden h-6 w-10 sm:block"
-                  viewBox="0 0 40 24"
-                  fill="none"
-                >
+                <svg className="hidden h-6 w-10 sm:block" viewBox="0 0 40 24" fill="none">
                   <path
                     d="M2 12H34M34 12L26 5M34 12L26 19"
                     stroke="url(#flowGrad)"
@@ -68,12 +63,11 @@ export default function FlowDiagramView({ flow }: { flow: FlowDiagram }) {
                   />
                   <defs>
                     <linearGradient id="flowGrad" x1="0" y1="0" x2="40" y2="0">
-                      <stop stopColor="var(--accent)" />
-                      <stop offset="1" stopColor="var(--accent-2)" />
+                      <stop stopColor="var(--primary)" />
+                      <stop offset="1" stopColor="var(--primary-light)" />
                     </linearGradient>
                   </defs>
                 </svg>
-                {/* vertical arrow for mobile */}
                 <svg className="mx-auto block h-8 w-6 sm:hidden" viewBox="0 0 24 32" fill="none">
                   <path
                     d="M12 2V26M12 26L5 18M12 26L19 18"
@@ -84,8 +78,8 @@ export default function FlowDiagramView({ flow }: { flow: FlowDiagram }) {
                   />
                   <defs>
                     <linearGradient id="flowGradV" x1="0" y1="0" x2="0" y2="32">
-                      <stop stopColor="var(--accent)" />
-                      <stop offset="1" stopColor="var(--accent-2)" />
+                      <stop stopColor="var(--primary)" />
+                      <stop offset="1" stopColor="var(--primary-light)" />
                     </linearGradient>
                   </defs>
                 </svg>

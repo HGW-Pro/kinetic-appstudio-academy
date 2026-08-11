@@ -48,12 +48,12 @@ export default function DashboardClient({ modules }: { modules: Module[] }) {
             const pct = m.lessons.length ? Math.round((lessonsDone / m.lessons.length) * 100) : 0;
             const certified = !!mp?.completedAt;
             return (
-              <div key={m.slug} className="glass-card rounded-2xl p-6">
+              <div key={m.slug} className="glass-card rounded-xl p-6">
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="flex items-center gap-4">
                     <span className="text-3xl">{m.icon}</span>
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--accent-2)]">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-[var(--primary)]">
                         Module {idx + 1}
                       </p>
                       <h3 className="text-base font-semibold text-[var(--text-hi)]">{m.title}</h3>
@@ -66,7 +66,7 @@ export default function DashboardClient({ modules }: { modules: Module[] }) {
                     )}
                     <Link
                       href={`/modules/${m.slug}`}
-                      className="rounded-full border border-white/15 bg-white/5 px-4 py-2 text-xs font-semibold text-[var(--text-hi)] transition hover:bg-white/10"
+                      className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-2 text-xs font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
                     >
                       {lessonsDone > 0 ? "Continue" : "Start"} →
                     </Link>
@@ -91,7 +91,7 @@ export default function DashboardClient({ modules }: { modules: Module[] }) {
         </p>
         <Link
           href="/labs"
-          className="mt-5 inline-block rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--accent)]/30 transition hover:scale-[1.02]"
+          className="mt-5 inline-block rounded-md bg-[var(--primary)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
         >
           Go to Hands-On Labs →
         </Link>
@@ -102,12 +102,8 @@ export default function DashboardClient({ modules }: { modules: Module[] }) {
 
 function MetricCard({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="glass-card rounded-2xl p-5 text-center">
-      <p
-        className={`text-2xl font-bold ${
-          accent ? "bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] bg-clip-text text-transparent" : "text-[var(--text-hi)]"
-        }`}
-      >
+    <div className="glass-card rounded-xl p-5 text-center">
+      <p className={`text-2xl font-bold ${accent ? "text-[var(--primary)]" : "text-[var(--text-hi)]"}`}>
         {value}
       </p>
       <p className="mt-1 text-[11px] uppercase tracking-wide text-[var(--text-lo)]">{label}</p>

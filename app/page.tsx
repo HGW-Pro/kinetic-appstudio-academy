@@ -7,32 +7,28 @@ export default function HomePage() {
 
   return (
     <div className="space-y-16">
-      <section className="relative overflow-hidden rounded-3xl glass-card glow-border px-6 py-16 text-center sm:px-12">
-        <span className="badge-pill mx-auto mb-6 w-fit">
+      <section className="hero-band relative overflow-hidden rounded-2xl px-6 py-16 text-center text-white sm:px-12">
+        <span className="mx-auto mb-6 flex w-fit items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-xs font-semibold uppercase tracking-wide">
           🎓 Internal Certification Track
         </span>
         <h1 className="mx-auto max-w-3xl text-4xl font-bold leading-tight tracking-tight sm:text-5xl">
-          Master{" "}
-          <span className="bg-gradient-to-r from-[var(--accent)] via-[var(--accent-2)] to-[var(--accent-3)] bg-clip-text text-transparent">
-            Kinetic Application Studio
-          </span>{" "}
-          the fast, hands-on way
+          Master Kinetic Application Studio the structured, hands-on way
         </h1>
-        <p className="mx-auto mt-5 max-w-2xl text-base text-[var(--text-mid)] sm:text-lg">
-          {modules.length} bite-sized modules, {totalLessons} lessons, and {totalQuizQuestions()} knowledge-check
-          questions distilled straight from the official Kinetic AppStudio 2023.1 &amp; 2023.2 guides —
+        <p className="mx-auto mt-5 max-w-2xl text-base text-white/85 sm:text-lg">
+          {modules.length} guided modules, {totalLessons} lessons, and {totalQuizQuestions()} knowledge-check
+          questions distilled from the official Kinetic AppStudio 2023.1 &amp; 2023.2 guides —
           plus a real hands-on lab to prove you can actually build it.
         </p>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
           <Link
             href="/modules"
-            className="rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--accent)]/30 transition hover:scale-[1.02]"
+            className="rounded-md bg-white px-6 py-3 text-sm font-semibold text-[var(--primary-dark)] shadow-sm transition hover:bg-white/90"
           >
             Start Training →
           </Link>
           <Link
             href="/dashboard"
-            className="rounded-full border border-white/15 bg-white/5 px-6 py-3 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-white/10"
+            className="rounded-md border border-white/30 bg-white/10 px-6 py-3 text-sm font-semibold text-white transition hover:bg-white/20"
           >
             View My Progress
           </Link>
@@ -54,7 +50,7 @@ export default function HomePage() {
               A structured path from first launch to production-grade layers.
             </p>
           </div>
-          <Link href="/modules" className="text-sm font-medium text-[var(--accent-2)] hover:underline">
+          <Link href="/modules" className="text-sm font-medium text-[var(--primary)] hover:underline">
             See all modules →
           </Link>
         </div>
@@ -63,14 +59,14 @@ export default function HomePage() {
             <Link
               key={m.slug}
               href={`/modules/${m.slug}`}
-              className="group glass-card flex flex-col justify-between rounded-2xl p-6 transition hover:-translate-y-1 hover:shadow-2xl hover:shadow-[var(--accent)]/10"
+              className="group glass-card flex flex-col justify-between rounded-2xl p-6 transition hover:-translate-y-1 hover:shadow-lg"
             >
               <div>
                 <div className="mb-3 flex items-center justify-between">
                   <span className="text-3xl">{m.icon}</span>
                   <span className="badge-pill">{m.difficulty}</span>
                 </div>
-                <h3 className="text-lg font-semibold text-[var(--text-hi)] group-hover:text-[var(--accent-2)]">
+                <h3 className="text-lg font-semibold text-[var(--text-hi)] group-hover:text-[var(--primary)]">
                   {idx + 1}. {m.title}
                 </h3>
                 <p className="mt-2 text-sm text-[var(--text-mid)]">{m.tagline}</p>
@@ -85,7 +81,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      <section className="glass-card rounded-3xl p-8 text-center">
+      <section className="glass-card rounded-2xl p-8 text-center">
         <h2 className="text-2xl font-semibold text-[var(--text-hi)]">
           Ready to prove it? Try a real lab.
         </h2>
@@ -95,7 +91,7 @@ export default function HomePage() {
         </p>
         <Link
           href="/labs"
-          className="mt-6 inline-block rounded-full border border-white/15 bg-white/5 px-6 py-3 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-white/10"
+          className="mt-6 inline-block rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-6 py-3 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
         >
           Explore Hands-On Labs →
         </Link>
@@ -106,9 +102,9 @@ export default function HomePage() {
 
 function Stat({ value, label }: { value: string; label: string }) {
   return (
-    <div className="glass-card rounded-xl px-4 py-3 text-center">
-      <p className="text-xl font-bold text-[var(--text-hi)]">{value}</p>
-      <p className="text-[11px] uppercase tracking-wide text-[var(--text-lo)]">{label}</p>
+    <div className="rounded-lg border border-white/20 bg-white/10 px-4 py-3 text-center">
+      <p className="text-xl font-bold text-white">{value}</p>
+      <p className="text-[11px] uppercase tracking-wide text-white/70">{label}</p>
     </div>
   );
 }

@@ -56,7 +56,7 @@ export default function QuizEngine({
     const pct = Math.round((score / questions.length) * 100);
     const passed = pct >= 80;
     return (
-      <div className="glass-card glow-border mx-auto max-w-xl rounded-3xl p-10 text-center">
+      <div className="glass-card glow-border mx-auto max-w-xl rounded-2xl p-10 text-center">
         <div className="text-6xl">{passed ? "🏆" : "📘"}</div>
         <h2 className="mt-4 text-2xl font-bold text-[var(--text-hi)]">
           {passed ? "Module Complete!" : "Almost there"}
@@ -69,7 +69,7 @@ export default function QuizEngine({
           <div className="progress-fill h-full" style={{ width: `${pct}%` }} />
         </div>
         {passed ? (
-          <p className="mt-4 text-sm text-[var(--accent-2)]">
+          <p className="mt-4 text-sm text-[var(--primary)]">
             🎉 You earned the badge for this module. Keep the streak going!
           </p>
         ) : (
@@ -80,21 +80,21 @@ export default function QuizEngine({
         <div className="mt-8 flex flex-wrap justify-center gap-3">
           <button
             onClick={retake}
-            className="rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-white/10"
+            className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
           >
             Retake Quiz
           </button>
           {nextModuleSlug && passed && (
             <Link
               href={`/modules/${nextModuleSlug}`}
-              className="rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-[var(--accent)]/30 transition hover:scale-[1.02]"
+              className="rounded-md bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
             >
               Next Module →
             </Link>
           )}
           <Link
             href="/dashboard"
-            className="rounded-full border border-white/15 bg-white/5 px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-white/10"
+            className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
           >
             Back to Dashboard
           </Link>
@@ -118,25 +118,25 @@ export default function QuizEngine({
         />
       </div>
 
-      <div className="glass-card glow-border rounded-3xl p-8">
+      <div className="glass-card glow-border rounded-2xl p-8">
         <h2 className="text-lg font-semibold text-[var(--text-hi)]">{q.question}</h2>
         <div className="mt-6 space-y-3">
           {q.options.map((opt, idx) => {
             const isCorrect = idx === q.correctIndex;
             const isSelected = idx === selected;
             let style =
-              "border-white/10 bg-white/[0.03] hover:bg-white/[0.06] text-[var(--text-mid)]";
+              "border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)] text-[var(--text-mid)]";
             if (locked && isCorrect) {
-              style = "border-emerald-400/40 bg-emerald-400/10 text-emerald-200";
+              style = "border-[var(--success)]/40 bg-[var(--success-soft)] text-[var(--success)]";
             } else if (locked && isSelected && !isCorrect) {
-              style = "border-rose-400/40 bg-rose-400/10 text-rose-200";
+              style = "border-[var(--error)]/40 bg-[var(--error-soft)] text-[var(--error)]";
             }
             return (
               <button
                 key={idx}
                 onClick={() => choose(idx)}
                 disabled={locked}
-                className={`w-full rounded-xl border px-5 py-3 text-left text-sm transition ${style}`}
+                className={`w-full rounded-lg border px-5 py-3 text-left text-sm transition ${style}`}
               >
                 {opt}
               </button>
@@ -145,8 +145,8 @@ export default function QuizEngine({
         </div>
 
         {locked && (
-          <div className="mt-5 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-[var(--text-mid)]">
-            <span className="mr-2 font-semibold text-[var(--accent-2)]">
+          <div className="mt-5 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-4 py-3 text-sm text-[var(--text-mid)]">
+            <span className="mr-2 font-semibold text-[var(--primary)]">
               {selected === q.correctIndex ? "✅ Correct." : "❌ Not quite."}
             </span>
             {q.explanation}
@@ -156,7 +156,7 @@ export default function QuizEngine({
         {locked && (
           <button
             onClick={next}
-            className="mt-6 w-full rounded-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[var(--accent)]/30 transition hover:scale-[1.01]"
+            className="mt-6 w-full rounded-md bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
           >
             {isLast ? "See Results" : "Next Question →"}
           </button>
