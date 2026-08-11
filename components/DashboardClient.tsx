@@ -3,33 +3,54 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Module } from "../lib/curriculum";
-import { loadProgress, overallStats, type ProgressState } from "../lib/progress";
+import { loadLocalProgress, loadRemoteProgress, overallStats, type ProgressState } from "../lib/progress";
+import { useAuth } from "./AuthProvider";
 
 export default function DashboardClient({ modules }: { modules: Module[] }) {
+  const { user, loading: authLoading } = useAuth();
   const [progress, setProgress] = useState<ProgressState>({});
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setProgress(loadProgress());
-    setMounted(true);
-  }, []);
+    if (authLoading) return;
+    (async () => {
+      if (user) {
+        const remote = await loadRemoteProgress(user.id);
+        setProgress(remote);
+      } else {
+        setProgress(loadLocalProgress());
+      }
+      setMounted(true);
+    })();
+  }, [user, authLoading]);
 
   const totalLessons = modules.reduce((n, m) => n + m.lessons.length, 0);
   const stats = mounted
-    ? overallStats(modules.length, totalLessons)
+    ? overallStats(modules.length, totalLessons, progress)
     : { lessonsDone: 0, totalLessons, modulesCertified: 0, totalModules: modules.length, avgScore: 0 };
 
   const overallPct = totalLessons ? Math.round((stats.lessonsDone / totalLessons) * 100) : 0;
 
   return (
     <div className="space-y-10">
-      <div>
-        <span className="badge-pill">📈 Your Progress</span>
-        <h1 className="mt-4 text-3xl font-bold text-[var(--text-hi)]">Learning Dashboard</h1>
-        <p className="mt-2 max-w-2xl text-sm text-[var(--text-mid)]">
-          Track your journey through the Kinetic AppStudio curriculum. Progress is saved locally
-          on this device.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <span className="badge-pill">📈 Your Progress</span>
+          <h1 className="mt-4 text-3xl font-bold text-[var(--text-hi)]">Learning Dashboard</h1>
+          <p className="mt-2 max-w-2xl text-sm text-[var(--text-mid)]">
+            {user
+              ? `Signed in as ${user.email}. Progress syncs across every device.`
+              : "Track your journey through the Kinetic AppStudio curriculum. Progress is saved on this device only."}
+          </p>
+        </div>
+        {!user && !authLoading && (
+          <Link
+            href="/login"
+            className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
+          >
+            Sign in to sync progress
+          </Link>
+        )}
       </div>
 
       <div className="grid gap-5 sm:grid-cols-4">
@@ -55,6 +76,7 @@ export default function DashboardClient({ modules }: { modules: Module[] }) {
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-[var(--primary)]">
                         Module {idx + 1}
+                        {mp?.enrolled ? " · Enrolled" : ""}
                       </p>
                       <h3 className="text-base font-semibold text-[var(--text-hi)]">{m.title}</h3>
                     </div>

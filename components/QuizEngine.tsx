@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { QuizQuestion } from "../lib/curriculum";
 import { recordQuizResult } from "../lib/progress";
+import { useAuth } from "./AuthProvider";
 
 export default function QuizEngine({
   moduleSlug,
@@ -16,6 +17,7 @@ export default function QuizEngine({
   questions: QuizQuestion[];
   nextModuleSlug?: string;
 }) {
+  const { user } = useAuth();
   const [current, setCurrent] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [locked, setLocked] = useState(false);
@@ -35,7 +37,7 @@ export default function QuizEngine({
   function next() {
     if (isLast) {
       const pct = Math.round((score / questions.length) * 100);
-      recordQuizResult(moduleSlug, pct);
+      recordQuizResult(moduleSlug, pct, user?.id);
       setFinished(true);
       return;
     }
@@ -75,6 +77,15 @@ export default function QuizEngine({
         ) : (
           <p className="mt-4 text-sm text-[var(--text-mid)]">
             You need 80% to earn the badge. Review the lessons and try again — you've got this.
+          </p>
+        )}
+        {!user && (
+          <p className="mt-3 text-xs text-[var(--text-lo)]">
+            Signed out — this score is saved on this device only.{" "}
+            <Link href="/login" className="font-semibold text-[var(--primary)] hover:underline">
+              Sign in
+            </Link>{" "}
+            to sync it to your profile.
           </p>
         )}
         <div className="mt-8 flex flex-wrap justify-center gap-3">

@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "./AuthProvider";
 
 const links = [
   { href: "/", label: "Home" },
@@ -12,6 +13,8 @@ const links = [
 
 export default function NavBar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { user, signOut, loading } = useAuth();
 
   return (
     <header className="sticky-header">
@@ -50,12 +53,33 @@ export default function NavBar() {
             );
           })}
         </nav>
-        <Link
-          href="/modules"
-          className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] sm:hidden"
-        >
-          Start
-        </Link>
+
+        <div className="flex items-center gap-2">
+          {!loading && user ? (
+            <button
+              onClick={async () => {
+                await signOut();
+                router.push("/");
+              }}
+              className="hidden rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-3.5 py-2 text-sm font-medium text-[var(--text-hi)] transition hover:bg-[var(--surface-3)] sm:inline-block"
+            >
+              Sign Out
+            </button>
+          ) : !loading ? (
+            <Link
+              href="/login"
+              className="hidden rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-3.5 py-2 text-sm font-medium text-[var(--text-hi)] transition hover:bg-[var(--surface-3)] sm:inline-block"
+            >
+              Sign In
+            </Link>
+          ) : null}
+          <Link
+            href="/modules"
+            className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] sm:hidden"
+          >
+            Start
+          </Link>
+        </div>
       </div>
     </header>
   );

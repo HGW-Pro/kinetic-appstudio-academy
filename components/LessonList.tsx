@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { Lesson } from "../lib/curriculum";
-import { loadProgress, markLessonComplete } from "../lib/progress";
+import { loadLocalProgress, markLessonComplete } from "../lib/progress";
+import { useAuth } from "./AuthProvider";
 import FlowDiagramView from "./FlowDiagram";
 
 function renderBody(text: string) {
@@ -19,13 +20,14 @@ export default function LessonList({
   moduleSlug: string;
   lessons: Lesson[];
 }) {
+  const { user } = useAuth();
   const [completed, setCompleted] = useState<string[]>([]);
   const [expandedId, setExpandedId] = useState<string>(lessons[0]?.id ?? "");
   const [justCompleted, setJustCompleted] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    const state = loadProgress();
+    const state = loadLocalProgress();
     const done = state[moduleSlug]?.lessonsCompleted ?? [];
     setCompleted(done);
     const firstIncomplete = lessons.find((l) => !done.includes(l.id));
@@ -36,15 +38,11 @@ export default function LessonList({
 
   if (!mounted) return null;
 
-  // The unlock frontier depends ONLY on how many lessons are completed —
-  // never on which card the user currently has expanded. This is the key
-  // fix: browsing back to review a completed lesson must not re-lock the
-  // next lesson that was already unlocked.
   const highestUnlockedIndex = Math.min(completed.length, lessons.length - 1);
   const pathPct = lessons.length > 1 ? (highestUnlockedIndex / (lessons.length - 1)) * 100 : 0;
 
   function handleComplete(lessonId: string, index: number) {
-    markLessonComplete(moduleSlug, lessonId);
+    markLessonComplete(moduleSlug, lessonId, user?.id);
     const updated = completed.includes(lessonId) ? completed : [...completed, lessonId];
     setCompleted(updated);
     setJustCompleted(lessonId);
@@ -58,7 +56,6 @@ export default function LessonList({
 
   return (
     <div className="relative">
-      {/* Vertical progress spine */}
       <div className="pointer-events-none absolute bottom-6 left-[23px] top-6 hidden w-[3px] sm:block">
         <div className="h-full w-full rounded-full bg-[var(--surface-3)]" />
         <div
@@ -70,14 +67,13 @@ export default function LessonList({
       <div className="space-y-5 sm:pl-14">
         {lessons.map((lesson, i) => {
           const isDone = completed.includes(lesson.id);
-          const isLocked = i > highestUnlockedIndex; // depends only on progress, not on view state
+          const isLocked = i > highestUnlockedIndex;
           const isExpanded = expandedId === lesson.id && !isLocked;
           const isPulsing = justCompleted === lesson.id;
           const isFrontier = i === highestUnlockedIndex && !isDone;
 
           return (
             <div key={lesson.id} className="relative">
-              {/* node marker on the spine */}
               <span
                 className={`absolute -left-14 top-6 hidden h-12 w-12 items-center justify-center rounded-full border-2 text-sm font-bold transition-all duration-500 sm:flex ${
                   isDone
@@ -158,6 +154,15 @@ export default function LessonList({
                     >
                       {isDone ? "Completed ✓" : i === lessons.length - 1 ? "Complete Module →" : "Complete & Continue →"}
                     </button>
+                    {!user && (
+                      <p className="mt-3 text-xs text-[var(--text-lo)]">
+                        Signed out — progress is saved on this device only.{" "}
+                        <a href="/login" className="font-semibold text-[var(--primary)] hover:underline">
+                          Sign in
+                        </a>{" "}
+                        to sync across devices.
+                      </p>
+                    )}
                   </div>
                 )}
               </div>

@@ -1,11 +1,12 @@
+"use client";
+
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { useEffect, useState } from "react";
 import { modules, getModule } from "../../../lib/curriculum";
 import LessonList from "../../../components/LessonList";
-
-export function generateStaticParams() {
-  return modules.map((m) => ({ slug: m.slug }));
-}
+import { useAuth } from "../../../components/AuthProvider";
+import { enrollInModule } from "../../../lib/progress";
 
 export default function ModuleDetailPage({
   params,
@@ -15,21 +16,60 @@ export default function ModuleDetailPage({
   const mod = getModule(params.slug);
   if (!mod) notFound();
 
+  const { user } = useAuth();
+  const [enrolled, setEnrolled] = useState(false);
+  const [enrolling, setEnrolling] = useState(false);
+
   const idx = modules.findIndex((m) => m.slug === mod.slug);
   const prev = modules[idx - 1];
   const next = modules[idx + 1];
 
+  useEffect(() => {
+    setEnrolled(false);
+  }, [mod.slug]);
+
+  async function handleEnroll() {
+    if (!user) return;
+    setEnrolling(true);
+    await enrollInModule(user.id, mod.slug);
+    setEnrolling(false);
+    setEnrolled(true);
+  }
+
   return (
     <div className="space-y-10">
       <div className="glass-card glow-border rounded-2xl p-8">
-        <div className="flex flex-wrap items-center gap-3">
-          <span className="text-4xl">{mod.icon}</span>
-          <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--primary)]">
-              Module {idx + 1} of {modules.length} · {mod.difficulty}
-            </p>
-            <h1 className="text-2xl font-bold text-[var(--text-hi)] sm:text-3xl">{mod.title}</h1>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-4xl">{mod.icon}</span>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--primary)]">
+                Module {idx + 1} of {modules.length} · {mod.difficulty}
+              </p>
+              <h1 className="text-2xl font-bold text-[var(--text-hi)] sm:text-3xl">{mod.title}</h1>
+            </div>
           </div>
+
+          {user ? (
+            <button
+              onClick={handleEnroll}
+              disabled={enrolling || enrolled}
+              className={`rounded-md px-4 py-2 text-sm font-semibold shadow-sm transition ${
+                enrolled
+                  ? "cursor-default bg-[var(--success-soft)] text-[var(--success)]"
+                  : "bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)]"
+              }`}
+            >
+              {enrolled ? "Enrolled ✓" : enrolling ? "Enrolling…" : "Enroll in Module"}
+            </button>
+          ) : (
+            <Link
+              href="/login"
+              className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
+            >
+              Sign in to enroll
+            </Link>
+          )}
         </div>
         <p className="mt-4 max-w-2xl text-sm text-[var(--text-mid)]">{mod.tagline}</p>
         <div className="mt-5 flex flex-wrap gap-3 text-xs text-[var(--text-lo)]">
