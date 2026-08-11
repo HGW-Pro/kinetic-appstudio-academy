@@ -1,3 +1,14 @@
+export type FlowStep = {
+  label: string;
+  detail?: string;
+};
+
+export type FlowDiagram = {
+  title: string;
+  steps: FlowStep[];
+  loop?: boolean; // draws a return arrow from last step back to first
+};
+
 export type Lesson = {
   id: string;
   title: string;
@@ -5,6 +16,7 @@ export type Lesson = {
   body: string[]; // paragraphs / bullet groups rendered as rich text
   proTip?: string;
   version?: "2023.1" | "2023.2" | "both";
+  flow?: FlowDiagram;
 };
 
 export type QuizQuestion = {
@@ -46,7 +58,15 @@ export const modules: Module[] = [
           "To use Application Studio at all, your user account needs the Customize Privileges checkbox enabled in User Account Security Maintenance."
         ],
         proTip: "Press Ctrl+Alt+D from inside almost any Kinetic screen to jump straight into Application Studio for that screen.",
-        version: "both"
+        version: "both",
+        flow: {
+          title: "Personalization → Layer promotion path",
+          steps: [
+            { label: "User Personalization", detail: "One user tweaks their own screen" },
+            { label: "Promote to Layer", detail: "Admin merges personalization into a layer" },
+            { label: "Company-wide Customization", detail: "Everyone benefits from the fix" }
+          ]
+        }
       },
       {
         id: "launching",
@@ -70,7 +90,17 @@ export const modules: Module[] = [
           "You can stack multiple layers on one application. Order matters: the **last** layer selected wins any conflicts, but non-conflicting changes from every layer all apply together."
         ],
         proTip: "Think of layer order like CSS specificity — last one loaded overrides earlier ones only where they actually collide.",
-        version: "both"
+        version: "both",
+        flow: {
+          title: "The layer lifecycle",
+          steps: [
+            { label: "Create Layer", detail: "Name + Description + Company" },
+            { label: "Edit in Designers", detail: "Application Map, Layout, Rules, Events, DataViews" },
+            { label: "Save (Draft)", detail: "Invisible to end users" },
+            { label: "Publish", detail: "Selectable in Menu Maintenance" },
+            { label: "Live for Users", detail: "Logged in Publish History" }
+          ]
+        }
       },
       {
         id: "designers",
@@ -169,7 +199,16 @@ export const modules: Module[] = [
           "**Virtual Pages** are just PanelCard or PanelCardGrid components with Full Screen visualization enabled. At runtime a Full Screen button expands them to show extra containers of detail while hiding the rest of the page — great for dense data without leaving the screen."
         ],
         proTip: "Deleting a Virtual Page from the Application Map simply clears the EnableFullScreen flag on its panel — nothing destructive happens to your data.",
-        version: "both"
+        version: "both",
+        flow: {
+          title: "Application Map hierarchy",
+          steps: [
+            { label: "Landing Page", detail: "Searchable grid, entry point" },
+            { label: "Tab", detail: "Navigation entry, e.g. Details / Activity" },
+            { label: "Page", detail: "Real layout: panels, grids, fields" },
+            { label: "Virtual Page", detail: "Full-screen expanded detail view" }
+          ]
+        }
       },
       {
         id: "sliding-panels",
@@ -202,7 +241,17 @@ export const modules: Module[] = [
           "To surface it as a Tab: add the page under the target Tab node, then edit the parent's TabStrip component properties → Data → add a new tab entry whose Id/Title matches the page's Name/TabID exactly, and set Page to your new page.",
           "Mismatched Name/TabID values are one of the most common beginner mistakes — Application Studio's Problems panel will flag validation errors if they don't line up."
         ],
-        version: "both"
+        version: "both",
+        flow: {
+          title: "Wiring a new tab end-to-end",
+          steps: [
+            { label: "Add Page", detail: "Under target parent node" },
+            { label: "Set Name / TabID", detail: "Must match exactly" },
+            { label: "Add Components", detail: "Panels, fields, grids" },
+            { label: "Edit TabStrip", detail: "Add tab entry pointing to page" },
+            { label: "Save + Preview", detail: "Validate & confirm" }
+          ]
+        }
       }
     ],
     quiz: [
@@ -276,7 +325,15 @@ export const modules: Module[] = [
           "**Leaf controls** (Button, TextBox, ComboBox, CheckBox, DatePicker, Grid, etc.) are the actual data-entry and display elements — they cannot float free on a page; they must sit inside an organizer or host.",
           "Kinetic 2023.2 formalized **nested components**: you can drop organizer components inside other organizers to build complex side-by-side arrangements of 6, 7, or more controls in a single row."
         ],
-        version: "both"
+        version: "both",
+        flow: {
+          title: "Component containment tiers",
+          steps: [
+            { label: "Host Container", detail: "PanelCard / PanelCardGrid / PanelCardGantt" },
+            { label: "Organizer", detail: "1Column / 2Column / GroupBox / Container" },
+            { label: "Leaf Control", detail: "Button / TextBox / ComboBox / Grid" }
+          ]
+        }
       },
       {
         id: "required-props",
@@ -310,7 +367,17 @@ export const modules: Module[] = [
           "Workflow: Application Studio Homepage → Components tab → New → design in the editor → Save & Publish → the component now appears under Toolbox → User Defined in every layer.",
           "Custom components can host any base control except widgets or other custom components (no infinite nesting of user-defined components)."
         ],
-        version: "both"
+        version: "both",
+        flow: {
+          title: "Building a reusable component",
+          steps: [
+            { label: "Components Tab", detail: "Application Studio Homepage" },
+            { label: "New Component", detail: "Enter component ID" },
+            { label: "Design in Editor", detail: "Drag controls, set properties" },
+            { label: "Save & Publish", detail: "Available under Toolbox → User Defined" },
+            { label: "Reuse Everywhere", detail: "Drop into any layer" }
+          ]
+        }
       },
       {
         id: "orphans",
@@ -395,7 +462,16 @@ export const modules: Module[] = [
           "Highlight colors follow a status convention: Red = Error, Orange = Warning, Green = Ok, Blue = Highlight — keep this consistent so users learn to read your app at a glance.",
           "System rules ship with the base app and can be copied but never edited or deleted. User-created rules can be freely copied, edited, disabled, or deleted."
         ],
-        version: "both"
+        version: "both",
+        flow: {
+          title: "Condition → Action rule flow",
+          steps: [
+            { label: "Header", detail: "Name + Description" },
+            { label: "Condition", detail: "OrderDtl.DiscountPercent > 8" },
+            { label: "Action", detail: "SettingStyle → Highlight" },
+            { label: "Publish Rule", detail: "Now enforced across the app" }
+          ]
+        }
       },
       {
         id: "cross-dataview",
@@ -418,7 +494,16 @@ export const modules: Module[] = [
           "Triggered events have a Trigger definition: Type (Control/Data/Event), Hook (OnClick/Before/After/Override), and Target (which component or system event to hook).",
           "You cannot edit a base-layer system event directly, but you CAN create your own event with a Before or After hook pointed at that system event's ID — your logic runs alongside it without ever touching Epicor's original workflow."
         ],
-        version: "both"
+        version: "both",
+        flow: {
+          title: "Event trigger → workflow chain",
+          steps: [
+            { label: "Trigger", detail: "Type + Hook + Target" },
+            { label: "Action 1", detail: "e.g. row-update" },
+            { label: "Action 2", detail: "e.g. message box" },
+            { label: "Action N", detail: "Chained via event-next" }
+          ]
+        }
       },
       {
         id: "event-override",
@@ -523,7 +608,17 @@ export const modules: Module[] = [
           "Static filters use the format `DataView.Column = 'Value'` (comma-separate multiple criteria) — handy when two views share one underlying server table but need to show different subsets, like splitting Credit Memo payments by IsCreditPayment true/false.",
           "You can load data into a view four ways: GridProviderModel, a service method dataset, a BAQ Results dataset (via the ERP-BAQ event action), or a Function's response parameter of tableset type."
         ],
-        version: "both"
+        version: "both",
+        flow: {
+          title: "Defining a new DataView",
+          steps: [
+            { label: "Map Data Source", detail: "Table / service dataset" },
+            { label: "Parent/Child Relations", detail: "If applicable" },
+            { label: "Static Filters", detail: "DataView.Column = 'Value'" },
+            { label: "Add Columns", detail: "Including calculated columns" },
+            { label: "Load Data", detail: "GridProvider / Service / BAQ / Function" }
+          ]
+        }
       },
       {
         id: "widgets-dashboards",
@@ -547,7 +642,16 @@ export const modules: Module[] = [
           "4) Save, then Preview — clicking the button should slide the panel out from the right immediately.",
           "This exact recipe — button → event → slider-open action — is reused everywhere in Kinetic, from map lookups to confirmation dialogs."
         ],
-        version: "both"
+        version: "both",
+        flow: {
+          title: "Button → Event → Sliding Panel",
+          steps: [
+            { label: "Add Action Button", detail: "ActionData Id: ToolShowMap" },
+            { label: "Create Event", detail: "Control / OnClick trigger" },
+            { label: "slider-open Action", detail: "Set Page parameter" },
+            { label: "Save + Preview", detail: "Panel slides in from the right" }
+          ]
+        }
       },
       {
         id: "solution-workbench",
@@ -640,7 +744,16 @@ export const modules: Module[] = [
           "Watch the Status column: Upgrade Success vs. Upgrade Failed (with an Error column explaining why) — use the Debug Tool or browser DevTools to chase down failures.",
           "Publishing works the same way: select unpublished (HasDraft) layers, then Publish Selected Layers in one batch instead of clicking through each app individually."
         ],
-        version: "both"
+        version: "both",
+        flow: {
+          title: "Bulk upgrade → publish pipeline",
+          steps: [
+            { label: "Select Layers", detail: "Checkbox in Homepage grid" },
+            { label: "Upgrade Selected", detail: "Base app + dependents upgraded" },
+            { label: "Check Status", detail: "Success vs Failed + Error column" },
+            { label: "Publish Selected", detail: "Batch publish HasDraft layers" }
+          ]
+        }
       },
       {
         id: "conversion",
@@ -651,7 +764,16 @@ export const modules: Module[] = [
           "It reliably converts simple UI components, combo boxes, foreign-key dataviews, sub-table dataviews, and wizard-generated data rules. It cannot convert custom actions/conditions in Data Rules or client-side logic based on custom code — that logic must be rebuilt using Functions and BPM directives on the server.",
           "Always verify converted layers in the Configuration Upgrade Dashboard: Pass (verify only), Warning (needs edits), or Error (needs a full rework)."
         ],
-        version: "both"
+        version: "both",
+        flow: {
+          title: "Conversion verification funnel",
+          steps: [
+            { label: "Program 180 Runs", detail: "During upgrade" },
+            { label: "Pass", detail: "Verify only" },
+            { label: "Warning", detail: "Needs manual edits" },
+            { label: "Error", detail: "Needs full rework" }
+          ]
+        }
       },
       {
         id: "governance",
@@ -673,7 +795,17 @@ export const modules: Module[] = [
           "Typical flow: define UD codes → add a UD field to a core table (e.g., Part) → regenerate the data model → surface the new field in the UI via a ComboBox or panel → deploy the layer.",
           "This is the deepest level of App Studio work — pair it with Functions and BPM Directives for validation and cross-system integration logic, exactly the kind of stack you already work with in Epicor."
         ],
-        version: "both"
+        version: "both",
+        flow: {
+          title: "Building a new UD screen",
+          steps: [
+            { label: "Define UD Codes", detail: "Custom subtypes/values" },
+            { label: "Add UD Field", detail: "e.g. onto Part table" },
+            { label: "Regenerate Data Model", detail: "Field becomes queryable" },
+            { label: "Surface in UI", detail: "ComboBox / panel in App Studio" },
+            { label: "Deploy Layer", detail: "Publish & test" }
+          ]
+        }
       }
     ],
     quiz: [
