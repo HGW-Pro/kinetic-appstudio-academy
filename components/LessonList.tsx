@@ -20,7 +20,7 @@ export default function LessonList({
   lessons: Lesson[];
 }) {
   const [completed, setCompleted] = useState<string[]>([]);
-  const [activeId, setActiveId] = useState<string>(lessons[0]?.id ?? "");
+  const [expandedId, setExpandedId] = useState<string>(lessons[0]?.id ?? "");
   const [justCompleted, setJustCompleted] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
@@ -29,27 +29,32 @@ export default function LessonList({
     const done = state[moduleSlug]?.lessonsCompleted ?? [];
     setCompleted(done);
     const firstIncomplete = lessons.find((l) => !done.includes(l.id));
-    setActiveId(firstIncomplete ? firstIncomplete.id : lessons[lessons.length - 1]?.id ?? "");
+    setExpandedId(firstIncomplete ? firstIncomplete.id : lessons[lessons.length - 1]?.id ?? "");
     setMounted(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moduleSlug]);
 
-  function handleComplete(lessonId: string) {
+  if (!mounted) return null;
+
+  // The unlock frontier depends ONLY on how many lessons are completed —
+  // never on which card the user currently has expanded. This is the key
+  // fix: browsing back to review a completed lesson must not re-lock the
+  // next lesson that was already unlocked.
+  const highestUnlockedIndex = Math.min(completed.length, lessons.length - 1);
+  const pathPct = lessons.length > 1 ? (highestUnlockedIndex / (lessons.length - 1)) * 100 : 0;
+
+  function handleComplete(lessonId: string, index: number) {
     markLessonComplete(moduleSlug, lessonId);
-    setCompleted((prev) => (prev.includes(lessonId) ? prev : [...prev, lessonId]));
+    const updated = completed.includes(lessonId) ? completed : [...completed, lessonId];
+    setCompleted(updated);
     setJustCompleted(lessonId);
-    const idx = lessons.findIndex((l) => l.id === lessonId);
-    const next = lessons[idx + 1];
+
+    const next = lessons[index + 1];
     window.setTimeout(() => {
       setJustCompleted(null);
-      if (next) setActiveId(next.id);
+      if (next) setExpandedId(next.id);
     }, 550);
   }
-
-  const doneCount = completed.length;
-  const pathPct = lessons.length > 1 ? (doneCount / (lessons.length - 1)) * 100 : 0;
-
-  if (!mounted) return null;
 
   return (
     <div className="relative">
@@ -65,9 +70,10 @@ export default function LessonList({
       <div className="space-y-5 sm:pl-14">
         {lessons.map((lesson, i) => {
           const isDone = completed.includes(lesson.id);
-          const isActive = lesson.id === activeId;
-          const isLocked = !isDone && !isActive;
+          const isLocked = i > highestUnlockedIndex; // depends only on progress, not on view state
+          const isExpanded = expandedId === lesson.id && !isLocked;
           const isPulsing = justCompleted === lesson.id;
+          const isFrontier = i === highestUnlockedIndex && !isDone;
 
           return (
             <div key={lesson.id} className="relative">
@@ -76,9 +82,11 @@ export default function LessonList({
                 className={`absolute -left-14 top-6 hidden h-12 w-12 items-center justify-center rounded-full border-2 text-sm font-bold transition-all duration-500 sm:flex ${
                   isDone
                     ? "border-[var(--primary-light)] bg-gradient-to-br from-[var(--primary)] to-[var(--primary-light)] text-white"
-                    : isActive
+                    : isFrontier
                     ? "border-[var(--primary)] bg-[var(--surface)] text-[var(--primary)] node-glow"
-                    : "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-lo)]"
+                    : isLocked
+                    ? "border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-lo)]"
+                    : "border-[var(--primary)] bg-[var(--surface)] text-[var(--primary)]"
                 } ${isPulsing ? "node-pop" : ""}`}
               >
                 {isDone ? "✓" : isLocked ? "🔒" : i + 1}
@@ -87,10 +95,10 @@ export default function LessonList({
               <div
                 className={`glass-card overflow-hidden rounded-xl transition-all duration-300 ${
                   isLocked ? "opacity-60" : "opacity-100"
-                } ${isActive ? "glow-border" : ""}`}
+                } ${isExpanded ? "glow-border" : ""}`}
               >
                 <button
-                  onClick={() => !isLocked && setActiveId(lesson.id)}
+                  onClick={() => !isLocked && setExpandedId(isExpanded ? "" : lesson.id)}
                   disabled={isLocked}
                   className={`flex w-full items-center justify-between gap-4 px-6 py-5 text-left ${
                     isLocked ? "cursor-not-allowed" : ""
@@ -116,13 +124,13 @@ export default function LessonList({
                     </p>
                   </div>
                   {!isLocked && (
-                    <span className={`text-lg text-[var(--text-lo)] transition ${isActive ? "rotate-90" : ""}`}>
+                    <span className={`text-lg text-[var(--text-lo)] transition ${isExpanded ? "rotate-90" : ""}`}>
                       ›
                     </span>
                   )}
                 </button>
 
-                {isActive && !isLocked && (
+                {isExpanded && (
                   <div className="border-t border-[var(--border)] px-6 py-5">
                     <div className="prose-lesson">
                       {lesson.body.map((p, idx) => (
@@ -140,7 +148,7 @@ export default function LessonList({
                     )}
 
                     <button
-                      onClick={() => handleComplete(lesson.id)}
+                      onClick={() => handleComplete(lesson.id, i)}
                       disabled={isDone}
                       className={`mt-5 rounded-md px-5 py-2 text-xs font-semibold transition ${
                         isDone
