@@ -7,7 +7,7 @@ import { modules, getModule } from "../../../lib/allModules";
 import LessonList from "../../../components/LessonList";
 import ModuleAccessGate from "../../../components/ModuleAccessGate";
 import { useAuth } from "../../../components/AuthProvider";
-import { enrollInModule } from "../../../lib/progress";
+import { enrollInModule, loadLocalProgress, loadRemoteProgress } from "../../../lib/progress";
 
 export default function ModuleDetailPage({
   params,
@@ -17,7 +17,7 @@ export default function ModuleDetailPage({
   const mod = getModule(params.slug);
   if (!mod) notFound();
 
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [enrolled, setEnrolled] = useState(false);
   const [enrolling, setEnrolling] = useState(false);
   const [enrollError, setEnrollError] = useState<string | null>(null);
@@ -27,9 +27,12 @@ export default function ModuleDetailPage({
   const next = modules[idx + 1];
 
   useEffect(() => {
-    setEnrolled(false);
-    setEnrollError(null);
-  }, [mod.slug]);
+    if (authLoading) return;
+    (async () => {
+      const p = user ? await loadRemoteProgress(user.id) : loadLocalProgress();
+      setEnrolled(!!p[mod.slug]?.enrolled);
+    })();
+  }, [user, authLoading, mod.slug]);
 
   async function handleEnroll() {
     if (!user) return;
@@ -45,7 +48,7 @@ export default function ModuleDetailPage({
   }
 
   return (
-    <ModuleAccessGate moduleSlug={mod.slug}>
+    <ModuleAccessGate moduleSlug={mod.slug} requireEnrollment={false}>
       <div className="space-y-10">
         <div className="glass-card glow-border rounded-2xl p-8">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -91,9 +94,39 @@ export default function ModuleDetailPage({
             <span className="badge-pill">{mod.estMinutes} min</span>
             <span className="badge-pill">{mod.quiz.length}-question assignment</span>
           </div>
+          {!enrolled && user && (
+            <p className="mt-4 rounded-lg border border-[var(--primary)]/20 bg-[var(--primary)]/[0.05] px-4 py-3 text-xs text-[var(--text-mid)]">
+              💡 You must enroll before you can open any lesson below or take the assignment.
+            </p>
+          )}
         </div>
 
-        <LessonList moduleSlug={mod.slug} lessons={mod.lessons} />
+        {enrolled ? (
+          <LessonList moduleSlug={mod.slug} lessons={mod.lessons} />
+        ) : user ? (
+          <div className="glass-card rounded-2xl p-8 text-center">
+            <p className="text-sm text-[var(--text-mid)]">
+              Lessons are locked until you enroll in this module.
+            </p>
+            <button
+              onClick={handleEnroll}
+              disabled={enrolling}
+              className="mt-4 rounded-md bg-[var(--primary)] px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] disabled:opacity-60"
+            >
+              {enrolling ? "Enrolling…" : "Enroll & Start →"}
+            </button>
+          </div>
+        ) : (
+          <div className="glass-card rounded-2xl p-8 text-center">
+            <p className="text-sm text-[var(--text-mid)]">Sign in to enroll and start this module.</p>
+            <Link
+              href="/login"
+              className="mt-4 inline-block rounded-md bg-[var(--primary)] px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
+            >
+              Sign In
+            </Link>
+          </div>
+        )}
 
         <div className="glass-card rounded-2xl p-6 text-center">
           <h2 className="text-lg font-semibold text-[var(--text-hi)]">
@@ -103,12 +136,18 @@ export default function ModuleDetailPage({
             Score 80% or higher on the {mod.quiz.length}-question assignment to earn this module's badge
             and unlock the next module.
           </p>
-          <Link
-            href={`/modules/${mod.slug}/quiz`}
-            className="mt-5 inline-block rounded-md bg-[var(--primary)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
-          >
-            Take the Assignment →
-          </Link>
+          {enrolled ? (
+            <Link
+              href={`/modules/${mod.slug}/quiz`}
+              className="mt-5 inline-block rounded-md bg-[var(--primary)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
+            >
+              Take the Assignment →
+            </Link>
+          ) : (
+            <span className="mt-5 inline-block rounded-md bg-[var(--surface-2)] px-6 py-3 text-sm font-semibold text-[var(--text-lo)]">
+              Locked — enroll first
+            </span>
+          )}
         </div>
 
         <div className="flex items-center justify-between text-sm">
