@@ -6,17 +6,30 @@ export type FlowStep = {
 export type FlowDiagram = {
   title: string;
   steps: FlowStep[];
-  loop?: boolean; // draws a return arrow from last step back to first
+  loop?: boolean;
+};
+
+export type MockupRow = {
+  label: string;
+  note?: string;
+  highlight?: boolean;
+};
+
+export type Mockup = {
+  title: string;
+  subtitle?: string;
+  rows: MockupRow[];
 };
 
 export type Lesson = {
   id: string;
   title: string;
   minutes: number;
-  body: string[]; // paragraphs / bullet groups rendered as rich text
+  body: string[];
   proTip?: string;
   version?: "2023.1" | "2023.2" | "both";
   flow?: FlowDiagram;
+  mockup?: Mockup;
 };
 
 export type QuizQuestion = {
@@ -31,7 +44,7 @@ export type Module = {
   slug: string;
   title: string;
   tagline: string;
-  icon: string; // emoji for zero-dependency premium feel
+  icon: string;
   estMinutes: number;
   difficulty: "Foundational" | "Intermediate" | "Advanced";
   lessons: Lesson[];
@@ -57,6 +70,20 @@ export const modules: Module[] = [
           "Don't confuse a **layer** (a company-wide customization) with a **personalization** (a single user's private tweak). Layers can later be promoted from a personalization, so a great personal fix can become a company standard.",
           "To use Application Studio at all, your user account needs the Customize Privileges checkbox enabled in User Account Security Maintenance."
         ],
+        mockup: {
+          title: "Application Studio — main screen anatomy",
+          subtitle: "left rail + top bar",
+          rows: [
+            { label: "Application Map", note: "left rail icon", highlight: true },
+            { label: "Layout Designer", note: "left rail icon" },
+            { label: "Data Rule Designer", note: "left rail icon" },
+            { label: "Event Designer", note: "left rail icon" },
+            { label: "Data View Designer", note: "left rail icon" },
+            { label: "Publish History", note: "left rail icon" },
+            { label: "Layer Name (e.g. MyNewLayer)", note: "top bar, click to switch layers" },
+            { label: "Preview / Save / Overflow (⋮)", note: "top-right toolbar" },
+          ],
+        },
         proTip: "Press Ctrl+Alt+D from inside almost any Kinetic screen to jump straight into Application Studio for that screen.",
         version: "both",
         flow: {
@@ -77,6 +104,19 @@ export const modules: Module[] = [
           "**Method 2 — From the Application Studio Homepage:** System Management → Kinetic Application Management → Application Studio. This grid lists every base and layered application in your system, with filters for type and last-update date.",
           "When you land in Application Studio you're always on a fresh, unsaved layer. You must create a new layer or load an existing one before you can preview, save, or publish anything."
         ],
+        mockup: {
+          title: "Overflow menu (⋮) on any Kinetic screen",
+          rows: [
+            { label: "Get Opportunity/Quote" },
+            { label: "Share" },
+            { label: "E-Signatures" },
+            { label: "Settings" },
+            { label: "Debug Tool" },
+            { label: "Translation Utility" },
+            { label: "Personalization" },
+            { label: "Application Studio", note: "click here (or Ctrl+Alt+D)", highlight: true },
+          ],
+        },
         version: "both"
       },
       {
@@ -89,6 +129,17 @@ export const modules: Module[] = [
           "If a user opens a published layer, edits it, and saves, the edit becomes a new unpublished draft again. You must re-publish to push the change live.",
           "You can stack multiple layers on one application. Order matters: the **last** layer selected wins any conflicts, but non-conflicting changes from every layer all apply together."
         ],
+        mockup: {
+          title: "Layer Selection panel",
+          rows: [
+            { label: "Save Layer / Change Layer", note: "top links" },
+            { label: "Layer Name *", note: "e.g. MyNewLayer", highlight: true },
+            { label: "CGCCode", note: "usually blank" },
+            { label: "Device Type", note: "Any Device / Phone / Tablet" },
+            { label: "Company Name", note: "defaults to All" },
+            { label: "Create Layer / Merge Layers", note: "links on the layer list screen" },
+          ],
+        },
         proTip: "Think of layer order like CSS specificity — last one loaded overrides earlier ones only where they actually collide.",
         version: "both",
         flow: {
@@ -187,6 +238,15 @@ export const modules: Module[] = [
           "Every application has one root **Dataset** (e.g., Customer) that everything downstream binds to. A small patch icon appears next to a property whenever a Business Process Management (BPM) patch is affecting it.",
           "Key landing page properties: Name, Caption, PageType (Apps/Process/Report/Dashboard/Shared), UseFullWidth, and EpBinding — the glue that ties a UI control to a specific application view."
         ],
+        mockup: {
+          title: "Customer landing page — grid properties",
+          subtitle: "metafx-panel-card-grid",
+          rows: [
+            { label: "ID", note: "grdLandingPage" },
+            { label: "Ep Binding", note: "LandingPage", highlight: true },
+            { label: "Search field Ep Binding", note: "LandingPage.CustID" },
+          ],
+        },
         version: "both"
       },
       {
@@ -198,6 +258,17 @@ export const modules: Module[] = [
           "A **Page** (usually PageType = TabPage) is where real layout components live — panels, grids, fields. Its EpBinding links it to a specific record context, and PageCaption can even show dynamic values like `Customer.CustID`.",
           "**Virtual Pages** are just PanelCard or PanelCardGrid components with Full Screen visualization enabled. At runtime a Full Screen button expands them to show extra containers of detail while hiding the rest of the page — great for dense data without leaving the screen."
         ],
+        mockup: {
+          title: "Tab properties — how a Tab links to a Page",
+          subtitle: "Details tab, Customer Entry",
+          rows: [
+            { label: "Id", note: "Tab-9c77b48" },
+            { label: "Title", note: "Details" },
+            { label: "EpBinding", note: "blank" },
+            { label: "Selected", note: "checked" },
+            { label: "Page", note: "Details", highlight: true },
+          ],
+        },
         proTip: "Deleting a Virtual Page from the Application Map simply clears the EnableFullScreen flag on its panel — nothing destructive happens to your data.",
         version: "both",
         flow: {
@@ -356,6 +427,14 @@ export const modules: Module[] = [
           "For a PanelCard, you must enable Full Screen manually. Once enabled, a second container box appears: keep your must-see fields in the primary container, and push secondary detail fields into the second container which is only shown after clicking Full Screen.",
           "At runtime, full-screen views also appear as separate nodes in the navigation tree, so users can deep-link directly to the expanded view."
         ],
+        mockup: {
+          title: "Customer Detail panel — Advanced properties",
+          subtitle: "metafx-panel-card",
+          rows: [
+            { label: "Expand at Runtime", note: "checked" },
+            { label: "Enable FullScreen", note: "checked — promotes to Virtual Page", highlight: true },
+          ],
+        },
         version: "2023.2"
       },
       {
@@ -462,6 +541,14 @@ export const modules: Module[] = [
           "Highlight colors follow a status convention: Red = Error, Orange = Warning, Green = Ok, Blue = Highlight — keep this consistent so users learn to read your app at a glance.",
           "System rules ship with the base app and can be copied but never edited or deleted. User-created rules can be freely copied, edited, disabled, or deleted."
         ],
+        mockup: {
+          title: "Rules list — right-click context menu",
+          subtitle: "e.g. Addison_Discount",
+          rows: [
+            { label: "Copy", note: "available for system + custom rules" },
+            { label: "Delete", note: "custom rules only", highlight: true },
+          ],
+        },
         version: "both",
         flow: {
           title: "Condition → Action rule flow",
@@ -494,6 +581,14 @@ export const modules: Module[] = [
           "Triggered events have a Trigger definition: Type (Control/Data/Event), Hook (OnClick/Before/After/Override), and Target (which component or system event to hook).",
           "You cannot edit a base-layer system event directly, but you CAN create your own event with a Before or After hook pointed at that system event's ID — your logic runs alongside it without ever touching Epicor's original workflow."
         ],
+        mockup: {
+          title: "Trigger panel properties",
+          rows: [
+            { label: "Type", note: "Control" },
+            { label: "Hook", note: "On Click" },
+            { label: "Target", note: "CreditCardSaleAction", highlight: true },
+          ],
+        },
         version: "both",
         flow: {
           title: "Event trigger → workflow chain",
@@ -608,6 +703,11 @@ export const modules: Module[] = [
           "Static filters use the format `DataView.Column = 'Value'` (comma-separate multiple criteria) — handy when two views share one underlying server table but need to show different subsets, like splitting Credit Memo payments by IsCreditPayment true/false.",
           "You can load data into a view four ways: GridProviderModel, a service method dataset, a BAQ Results dataset (via the ERP-BAQ event action), or a Function's response parameter of tableset type."
         ],
+        mockup: {
+          title: "Views list — right-click context menu",
+          subtitle: "e.g. OrderDtl",
+          rows: [{ label: "Delete", note: "custom views only — no Copy option here", highlight: true }],
+        },
         version: "both",
         flow: {
           title: "Defining a new DataView",
@@ -640,8 +740,17 @@ export const modules: Module[] = [
           "2) Create an Event with a Control/OnClick trigger targeting that Action Id.",
           "3) Drop a slider-open action into the event workflow and set its Page parameter to your sliding panel's ID.",
           "4) Save, then Preview — clicking the button should slide the panel out from the right immediately.",
-          "This exact recipe — button → event → slider-open action — is reused everywhere in Kinetic, from map lookups to confirmation dialogs."
+          "This exact recipe — button → event → slider-open action — is reused everywhere in Kinetic. A real example from Customer Entry: the 'Change ID' button has ActionData Id = Customer.ChgIDButton, and its (Locked, system) event flow is exactly Control:Customer.ChgIDButton onClick → row-update → slider-open, opening the 'Change Customer ID' panel."
         ],
+        mockup: {
+          title: "Change ID button — Action Data properties",
+          subtitle: "Customer Entry",
+          rows: [
+            { label: "ID", note: "Customer.ChgIDButton" },
+            { label: "Description", note: "Change ID" },
+            { label: "EpBinding", note: "Customer.ChgIDButton", highlight: true },
+          ],
+        },
         version: "both",
         flow: {
           title: "Button → Event → Sliding Panel",
@@ -733,6 +842,14 @@ export const modules: Module[] = [
           "**Dashboard Developer** rights let you modify base dashboards; **Customize Privileges** rights let you create new layers/alternate versions of existing apps. An SDK license unlocks creating brand-new applications from templates (Apps, Configurator, Dashboard, Process, Report, Shared).",
           "2023.2 adds a clear visual indicator distinguishing system apps (ticked) from custom apps (no indicator) directly in the Homepage grid — much faster triage across a large system."
         ],
+        mockup: {
+          title: "Publish History",
+          rows: [
+            { label: "User", note: "column" },
+            { label: "Published Date/Time", note: "column" },
+            { label: "Description", note: "column", highlight: true },
+          ],
+        },
         version: "both"
       },
       {

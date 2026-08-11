@@ -8,7 +8,6 @@ const links = [
   { href: "/", label: "Home" },
   { href: "/dashboard", label: "Dashboard" },
   { href: "/modules", label: "Training Modules" },
-  { href: "/reference", label: "UI Reference" },
   { href: "/labs", label: "Hands-On Labs" },
 ];
 
@@ -33,7 +32,7 @@ export default function NavBar() {
             </p>
           </div>
         </Link>
-        <nav className="hidden items-center gap-1 lg:flex">
+        <nav className="hidden items-center gap-1 sm:flex">
           {links.map((link) => {
             const active =
               link.href === "/"
@@ -76,7 +75,7 @@ export default function NavBar() {
           ) : null}
           <Link
             href="/modules"
-            className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] lg:hidden"
+            className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] sm:hidden"
           >
             Start
           </Link>

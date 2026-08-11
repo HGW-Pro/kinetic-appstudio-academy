@@ -5,6 +5,7 @@ import type { Lesson } from "../lib/curriculum";
 import { loadLocalProgress, markLessonComplete } from "../lib/progress";
 import { useAuth } from "./AuthProvider";
 import FlowDiagramView from "./FlowDiagram";
+import VisualMockup from "./VisualMockup";
 
 function renderBody(text: string) {
   const parts = text.split(/\*\*(.*?)\*\*/g);
@@ -134,6 +135,7 @@ export default function LessonList({
                       ))}
                     </div>
 
+                    {lesson.mockup && <VisualMockup mockup={lesson.mockup} />}
                     {lesson.flow && <FlowDiagramView flow={lesson.flow} />}
 
                     {lesson.proTip && (
