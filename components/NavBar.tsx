@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./AuthProvider";
+import SoundToggle from "./SoundToggle";
 
 const links = [
   { href: "/", label: "Home" },
@@ -55,6 +56,7 @@ export default function NavBar() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <SoundToggle />
           {!loading && user ? (
             <button
               onClick={async () => {

@@ -5,6 +5,8 @@ import Link from "next/link";
 import type { QuizQuestion } from "../lib/curriculum";
 import { recordQuizResult } from "../lib/progress";
 import { useAuth } from "./AuthProvider";
+import { playSound } from "../lib/sounds";
+import Confetti from "./Confetti";
 
 export default function QuizEngine({
   moduleSlug,
@@ -23,6 +25,7 @@ export default function QuizEngine({
   const [locked, setLocked] = useState(false);
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
+  const [celebrate, setCelebrate] = useState(false);
 
   const q = questions[current];
   const isLast = current === questions.length - 1;
@@ -31,22 +34,32 @@ export default function QuizEngine({
     if (locked) return;
     setSelected(idx);
     setLocked(true);
-    if (idx === q.correctIndex) setScore((s) => s + 1);
+    const correct = idx === q.correctIndex;
+    playSound(correct ? "correct" : "wrong");
+    if (correct) setScore((s) => s + 1);
   }
 
   function next() {
     if (isLast) {
       const pct = Math.round((score / questions.length) * 100);
       recordQuizResult(moduleSlug, pct, user?.id);
+      const passed = pct >= 80;
+      playSound(passed ? "fanfare" : "wrong");
+      if (passed) {
+        setCelebrate(true);
+        window.setTimeout(() => setCelebrate(false), 3200);
+      }
       setFinished(true);
       return;
     }
+    playSound("click");
     setCurrent((c) => c + 1);
     setSelected(null);
     setLocked(false);
   }
 
   function retake() {
+    playSound("click");
     setCurrent(0);
     setSelected(null);
     setLocked(false);
@@ -58,59 +71,63 @@ export default function QuizEngine({
     const pct = Math.round((score / questions.length) * 100);
     const passed = pct >= 80;
     return (
-      <div className="glass-card glow-border mx-auto max-w-xl rounded-2xl p-10 text-center">
-        <div className="text-6xl">{passed ? "🏆" : "📘"}</div>
-        <h2 className="mt-4 text-2xl font-bold text-[var(--text-hi)]">
-          {passed ? "Module Complete!" : "Almost there"}
-        </h2>
-        <p className="mt-2 text-sm text-[var(--text-mid)]">
-          You scored <span className="font-semibold text-[var(--text-hi)]">{score}/{questions.length}</span> ({pct}%)
-          on {moduleTitle}.
-        </p>
-        <div className="progress-track mx-auto mt-6 h-3 max-w-sm">
-          <div className="progress-fill h-full" style={{ width: `${pct}%` }} />
-        </div>
-        {passed ? (
-          <p className="mt-4 text-sm text-[var(--primary)]">
-            🎉 You earned the badge for this module. Keep the streak going!
+      <>
+        <Confetti fire={celebrate} />
+        <div className="glass-card glow-border mx-auto max-w-xl rounded-2xl p-10 text-center">
+          <div className={`text-6xl ${passed ? "trophy-bounce" : ""}`}>{passed ? "🏆" : "📘"}</div>
+          <h2 className="mt-4 text-2xl font-bold text-[var(--text-hi)]">
+            {passed ? "Module Complete!" : "Almost there"}
+          </h2>
+          <p className="mt-2 text-sm text-[var(--text-mid)]">
+            You scored <span className="font-semibold text-[var(--text-hi)]">{score}/{questions.length}</span> ({pct}%)
+            on {moduleTitle}.
           </p>
-        ) : (
-          <p className="mt-4 text-sm text-[var(--text-mid)]">
-            You need 80% to earn the badge. Review the lessons and try again — you've got this.
-          </p>
-        )}
-        {!user && (
-          <p className="mt-3 text-xs text-[var(--text-lo)]">
-            Signed out — this score is saved on this device only.{" "}
-            <Link href="/login" className="font-semibold text-[var(--primary)] hover:underline">
-              Sign in
-            </Link>{" "}
-            to sync it to your profile.
-          </p>
-        )}
-        <div className="mt-8 flex flex-wrap justify-center gap-3">
-          <button
-            onClick={retake}
-            className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
-          >
-            Retake Quiz
-          </button>
-          {nextModuleSlug && passed && (
-            <Link
-              href={`/modules/${nextModuleSlug}`}
-              className="rounded-md bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
-            >
-              Next Module →
-            </Link>
+          <div className="progress-track mx-auto mt-6 h-3 max-w-sm">
+            <div className="progress-fill h-full" style={{ width: `${pct}%` }} />
+          </div>
+          {passed ? (
+            <p className="mt-4 text-sm text-[var(--primary)]">
+              🎉 You earned the badge for this module. Keep the streak going!
+            </p>
+          ) : (
+            <p className="mt-4 text-sm text-[var(--text-mid)]">
+              You need 80% to earn the badge. Review the lessons and try again — you've got this.
+            </p>
           )}
-          <Link
-            href="/dashboard"
-            className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
-          >
-            Back to Dashboard
-          </Link>
+          {!user && (
+            <p className="mt-3 text-xs text-[var(--text-lo)]">
+              Signed out — this score is saved on this device only.{" "}
+              <Link href="/login" className="font-semibold text-[var(--primary)] hover:underline">
+                Sign in
+              </Link>{" "}
+              to sync it to your profile.
+            </p>
+          )}
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <button
+              onClick={retake}
+              className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
+            >
+              Retake Quiz
+            </button>
+            {nextModuleSlug && passed && (
+              <Link
+                href={`/modules/${nextModuleSlug}`}
+                onClick={() => playSound("unlock")}
+                className="rounded-md bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
+              >
+                Next Module →
+              </Link>
+            )}
+            <Link
+              href="/dashboard"
+              className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
+            >
+              Back to Dashboard
+            </Link>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -137,17 +154,20 @@ export default function QuizEngine({
             const isSelected = idx === selected;
             let style =
               "border-[var(--border)] bg-[var(--surface)] hover:bg-[var(--surface-2)] text-[var(--text-mid)]";
+            let extra = "";
             if (locked && isCorrect) {
               style = "border-[var(--success)]/40 bg-[var(--success-soft)] text-[var(--success)]";
+              extra = "answer-pop";
             } else if (locked && isSelected && !isCorrect) {
               style = "border-[var(--error)]/40 bg-[var(--error-soft)] text-[var(--error)]";
+              extra = "answer-shake";
             }
             return (
               <button
                 key={idx}
                 onClick={() => choose(idx)}
                 disabled={locked}
-                className={`w-full rounded-lg border px-5 py-3 text-left text-sm transition ${style}`}
+                className={`w-full rounded-lg border px-5 py-3 text-left text-sm transition ${style} ${extra}`}
               >
                 {opt}
               </button>

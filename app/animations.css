@@ -1,0 +1,63 @@
+/* Extra interactive animations layered on top of globals.css */
+
+@keyframes confettiFall {
+  0% {
+    transform: translateY(-10vh) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(110vh) rotate(360deg);
+    opacity: 0.9;
+  }
+}
+.confetti-piece {
+  animation-name: confettiFall;
+  animation-timing-function: cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  animation-fill-mode: forwards;
+}
+
+@keyframes trophyBounce {
+  0% { transform: scale(0.4) rotate(-15deg); opacity: 0; }
+  50% { transform: scale(1.25) rotate(8deg); opacity: 1; }
+  70% { transform: scale(0.92) rotate(-4deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.trophy-bounce {
+  animation: trophyBounce 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes answerPop {
+  0% { transform: scale(1); }
+  40% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+.answer-pop {
+  animation: answerPop 0.35s ease;
+}
+
+@keyframes answerShake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(5px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(3px); }
+}
+.answer-shake {
+  animation: answerShake 0.4s ease;
+}
+
+@keyframes lessonReveal {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.lesson-reveal {
+  animation: lessonReveal 0.3s ease;
+}
+
+@keyframes lessonLineIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.lesson-line {
+  animation: lessonLineIn 0.4s ease both;
+}

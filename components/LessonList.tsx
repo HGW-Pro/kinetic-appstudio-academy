@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { Lesson } from "../lib/curriculum";
 import { loadLocalProgress, markLessonComplete } from "../lib/progress";
 import { useAuth } from "./AuthProvider";
+import { playSound } from "../lib/sounds";
 import FlowDiagramView from "./FlowDiagram";
 import VisualMockup from "./VisualMockup";
 import ImageGallery, { type LessonImage } from "./ImageGallery";
@@ -54,12 +55,18 @@ export default function LessonList({
     const updated = completed.includes(lessonId) ? completed : [...completed, lessonId];
     setCompleted(updated);
     setJustCompleted(lessonId);
+    playSound(index === lessons.length - 1 ? "complete" : "unlock");
 
     const next = lessons[index + 1];
     window.setTimeout(() => {
       setJustCompleted(null);
       if (next) setExpandedId(next.id);
     }, 550);
+  }
+
+  function handleExpand(lessonId: string, currentlyExpanded: boolean) {
+    playSound("click");
+    setExpandedId(currentlyExpanded ? "" : lessonId);
   }
 
   return (
@@ -119,7 +126,7 @@ export default function LessonList({
                 } ${isExpanded ? "glow-border" : ""}`}
               >
                 <button
-                  onClick={() => !isLocked && setExpandedId(isExpanded ? "" : lesson.id)}
+                  onClick={() => !isLocked && handleExpand(lesson.id, isExpanded)}
                   disabled={isLocked}
                   className={`flex w-full items-center justify-between gap-4 px-6 py-5 text-left ${
                     isLocked ? "cursor-not-allowed" : ""
@@ -153,10 +160,12 @@ export default function LessonList({
                 </button>
 
                 {isExpanded && (
-                  <div className="border-t border-[var(--border)] px-6 py-5">
+                  <div className="lesson-reveal border-t border-[var(--border)] px-6 py-5">
                     <div className="prose-lesson">
                       {lesson.body.map((p, idx) => (
-                        <p key={idx}>{renderBody(p)}</p>
+                        <p key={idx} className="lesson-line" style={{ animationDelay: `${idx * 90}ms` }}>
+                          {renderBody(p)}
+                        </p>
                       ))}
                     </div>
 
@@ -178,7 +187,7 @@ export default function LessonList({
                         className={`mt-5 rounded-md px-5 py-2 text-xs font-semibold transition ${
                           isDone
                             ? "cursor-default bg-[var(--surface-2)] text-[var(--text-lo)]"
-                            : "bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)]"
+                            : "bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)] hover:scale-[1.03]"
                         }`}
                       >
                         {isDone ? "Completed ✓" : i === lessons.length - 1 ? "Complete Module →" : "Complete & Continue →"}
