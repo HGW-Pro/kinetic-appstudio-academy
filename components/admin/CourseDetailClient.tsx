@@ -5,23 +5,11 @@ import type { TopicRecord, SubtopicRecord, QuizRecord } from "../../lib/admin/ty
 import TopicForm from "./TopicForm";
 import SubtopicEditor from "./SubtopicEditor";
 
-// Two-level "list first, click to edit" navigation:
-//   1. Topics render as a flat list (title + subtopic count). Nothing is
-//      auto-expanded. Clicking a topic opens ONLY that topic's detail
-//      panel (its edit form + its subtopics list).
-//   2. Inside an open topic, subtopics are themselves a flat list first.
-//      Clicking a subtopic opens ONLY that subtopic's full editor.
-// This replaces the previous behavior where the first topic auto-expanded
-// on load and every one of its subtopics rendered as a fully-open editor
-// simultaneously.
-
 function SubtopicRow({
   subtopic,
-  isOpen,
   onToggle,
 }: {
   subtopic: SubtopicRecord;
-  isOpen: boolean;
   onToggle: () => void;
 }) {
   return (
@@ -31,7 +19,7 @@ function SubtopicRow({
       className="flex w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-left text-sm transition hover:border-slate-400"
     >
       <span className="font-medium text-slate-800">{subtopic.title}</span>
-      <span className={`text-slate-400 transition ${isOpen ? "rotate-90" : ""}`}>›</span>
+      <span className="text-slate-400 transition">›</span>
     </button>
   );
 }
@@ -83,6 +71,19 @@ export default function CourseDetailClient({
 
             {isTopicOpen && (
               <div className="space-y-4 border-t border-slate-200 p-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Editing "{topic.title}"
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={() => toggleTopic(topic.id)}
+                    className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+                  >
+                    ▲ Collapse
+                  </button>
+                </div>
+
                 <TopicForm courseId={courseId} topic={topic} />
 
                 <div className="space-y-2 pl-2">
@@ -99,14 +100,10 @@ export default function CourseDetailClient({
                         subtopic={sub}
                         quiz={quizBySubtopicId.get(sub.id)}
                         onDone={() => setOpenSubtopicId(null)}
+                        onCancel={() => setOpenSubtopicId(null)}
                       />
                     ) : (
-                      <SubtopicRow
-                        key={sub.id}
-                        subtopic={sub}
-                        isOpen={false}
-                        onToggle={() => setOpenSubtopicId(sub.id)}
-                      />
+                      <SubtopicRow key={sub.id} subtopic={sub} onToggle={() => setOpenSubtopicId(sub.id)} />
                     )
                   )}
 
@@ -115,6 +112,7 @@ export default function CourseDetailClient({
                       topicId={topic.id}
                       courseId={courseId}
                       onDone={() => setAddingSubtopicFor(null)}
+                      onCancel={() => setAddingSubtopicFor(null)}
                     />
                   ) : (
                     <button
@@ -133,7 +131,19 @@ export default function CourseDetailClient({
       })}
 
       {addingTopic ? (
-        <TopicForm courseId={courseId} onDone={() => setAddingTopic(false)} />
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">New Topic</span>
+            <button
+              type="button"
+              onClick={() => setAddingTopic(false)}
+              className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+            >
+              ✕ Close
+            </button>
+          </div>
+          <TopicForm courseId={courseId} onDone={() => setAddingTopic(false)} />
+        </div>
       ) : (
         <button
           type="button"

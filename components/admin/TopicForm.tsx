@@ -66,11 +66,12 @@ export default function TopicForm({
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Order</label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Position</label>
           <input
             type="number"
+            min={1}
             name="sequence_order"
-            defaultValue={topic?.sequence_order ?? 0}
+            defaultValue={topic ? topic.sequence_order + 1 : 9999}
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
           />
         </div>
@@ -87,6 +88,9 @@ export default function TopicForm({
           className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
         />
       </div>
+      <p className="text-[11px] text-slate-400">
+        1 = first. Setting this shifts every other topic in this course to make room.
+      </p>
       <div className="flex gap-2">
         <button
           type="submit"

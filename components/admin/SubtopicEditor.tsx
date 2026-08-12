@@ -23,19 +23,17 @@ export default function SubtopicEditor({
   subtopic,
   quiz,
   onDone,
+  onCancel,
 }: {
   topicId: string;
   courseId: string;
   subtopic?: SubtopicRecord;
   quiz?: QuizRecord;
   onDone?: () => void;
+  onCancel?: () => void;
 }) {
   const [title, setTitle] = useState(subtopic?.title ?? "");
-  const [sequenceOrder, setSequenceOrder] = useState(subtopic?.sequence_order ?? 0);
-  // Normalize on load: subtopics migrated/imported before the body schema
-  // was ordered SlideNode[] may still have plain string[] bodies (or a
-  // legacy sibling `images[]`) sitting in the database. Without this,
-  // those subtopics render as completely empty in the editor.
+  const [sequenceOrder, setSequenceOrder] = useState((subtopic?.sequence_order ?? 0) + 1);
   const [blocks, setBlocks] = useState<ContentBlock[]>(
     subtopic ? normalizeContentBlocks(subtopic.content_json) : DEFAULT_CONTENT
   );
@@ -77,12 +75,7 @@ export default function SubtopicEditor({
       setFormError(result.error ?? null);
       return;
     }
-    show(
-      isEdit
-        ? "Subtopic updated. This also fixes the display permanently if it was showing empty before."
-        : "Subtopic created.",
-      "success"
-    );
+    show(isEdit ? "Subtopic updated." : "Subtopic created.", "success");
     router.refresh();
     onDone?.();
   }
@@ -141,6 +134,21 @@ export default function SubtopicEditor({
 
   return (
     <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-semibold text-slate-700">
+          {isEdit ? `Editing: ${subtopic!.title}` : "New Subtopic"}
+        </span>
+        {onCancel && (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+          >
+            ✕ Close
+          </button>
+        )}
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="sm:col-span-2">
@@ -153,15 +161,19 @@ export default function SubtopicEditor({
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Order</label>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Position</label>
             <input
               type="number"
+              min={1}
               value={sequenceOrder}
               onChange={(e) => setSequenceOrder(Number(e.target.value))}
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
             />
           </div>
         </div>
+        <p className="text-[11px] text-slate-400">
+          1 = first. Setting this shifts every other subtopic in this topic to make room.
+        </p>
 
         <div>
           <div className="mb-2 flex items-center justify-between">
@@ -200,6 +212,15 @@ export default function SubtopicEditor({
               className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-semibold text-red-600 transition hover:bg-red-50 disabled:opacity-50"
             >
               {deleting ? "Deleting…" : "Delete"}
+            </button>
+          )}
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition hover:bg-slate-50"
+            >
+              Cancel
             </button>
           )}
         </div>

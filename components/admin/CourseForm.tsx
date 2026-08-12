@@ -76,9 +76,7 @@ export default function CourseForm({ course }: { course?: CourseRecord }) {
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <ImageUploader label="Course cover image" pathPrefix="courses" onUploaded={setImageUrl} />
-          {imageUrl && (
-            <input type="hidden" name="image_url" value={imageUrl} readOnly />
-          )}
+          {imageUrl && <input type="hidden" name="image_url" value={imageUrl} readOnly />}
           <input
             type="text"
             value={imageUrl}
@@ -88,15 +86,18 @@ export default function CourseForm({ course }: { course?: CourseRecord }) {
           />
         </div>
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Sequence order
-          </label>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Position</label>
           <input
             type="number"
+            min={1}
             name="sequence_order"
-            defaultValue={course?.sequence_order ?? 0}
+            defaultValue={course ? course.sequence_order + 1 : 9999}
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
           />
+          <p className="mt-1 text-[11px] text-slate-400">
+            1 = first. Setting this shifts every other course to make room — it never creates a
+            duplicate position.
+          </p>
         </div>
       </div>
 

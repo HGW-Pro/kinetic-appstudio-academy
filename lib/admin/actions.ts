@@ -38,6 +38,42 @@ function actionError(err: unknown): ActionResult<never> {
   return { ok: false, error: "An unexpected error occurred." };
 }
 
+// ---------------- Shared reordering helper ----------------
+// Editing an item's "position" field previously just overwrote
+// sequence_order with the typed number verbatim -- setting a topic to
+// position 1 while another topic already held position 1 produced two
+// topics both at 1, instead of shifting the existing one down. This
+// computes a full re-sequenced order instead: remove the moved item from
+// its current slot, clamp the desired 0-based index to a valid range,
+// reinsert it there, and renumber every sibling in the same scope
+// sequentially -- the same semantics as reordering a normal list.
+async function reorderEntities(
+  supabase: ReturnType<typeof createSupabaseServerClient>,
+  table: "courses" | "topics" | "subtopics",
+  scopeColumn: "course_id" | "topic_id" | null,
+  scopeValue: string | null,
+  movedId: string,
+  desiredIndex: number
+): Promise<{ error: string | null }> {
+  let query = supabase.from(table).select("id").order("sequence_order", { ascending: true });
+  if (scopeColumn && scopeValue) {
+    query = query.eq(scopeColumn, scopeValue);
+  }
+  const { data, error } = await query;
+  if (error) return { error: error.message };
+
+  let ids = (data ?? []).map((r: { id: string }) => r.id);
+  ids = ids.filter((id) => id !== movedId);
+  const clamped = Math.max(0, Math.min(Math.trunc(desiredIndex), ids.length));
+  ids.splice(clamped, 0, movedId);
+
+  for (let i = 0; i < ids.length; i++) {
+    const { error: updErr } = await supabase.from(table).update({ sequence_order: i }).eq("id", ids[i]);
+    if (updErr) return { error: updErr.message };
+  }
+  return { error: null };
+}
+
 // ---------------- Courses ----------------
 
 export async function createCourse(formData: FormData): Promise<ActionResult<{ id: string }>> {
@@ -48,7 +84,7 @@ export async function createCourse(formData: FormData): Promise<ActionResult<{ i
     const title = String(formData.get("title") ?? "").trim();
     const description = String(formData.get("description") ?? "").trim();
     const image_url = String(formData.get("image_url") ?? "").trim();
-    const sequence_order = Number(formData.get("sequence_order") ?? 0);
+    const positionRaw = Number(formData.get("sequence_order") ?? 1);
     let slug = String(formData.get("slug") ?? "").trim();
 
     if (!title) return { ok: false, error: "Title is required." };
@@ -56,19 +92,13 @@ export async function createCourse(formData: FormData): Promise<ActionResult<{ i
     if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) {
       return { ok: false, error: "Slug must be lowercase-kebab-case (e.g. 'my-course')." };
     }
-    if (!Number.isFinite(sequence_order)) {
-      return { ok: false, error: "Sequence order must be a number." };
+    if (!Number.isFinite(positionRaw)) {
+      return { ok: false, error: "Position must be a number." };
     }
 
     const { data, error } = await supabase
       .from("courses")
-      .insert({
-        title,
-        slug,
-        description: description || null,
-        image_url: image_url || null,
-        sequence_order,
-      })
+      .insert({ title, slug, description: description || null, image_url: image_url || null, sequence_order: 999999 })
       .select("id")
       .single();
 
@@ -76,6 +106,9 @@ export async function createCourse(formData: FormData): Promise<ActionResult<{ i
       if (error.code === "23505") return { ok: false, error: `A course with slug "${slug}" already exists.` };
       return { ok: false, error: error.message };
     }
+
+    const { error: reorderErr } = await reorderEntities(supabase, "courses", null, null, data.id, positionRaw - 1);
+    if (reorderErr) return { ok: false, error: reorderErr };
 
     revalidatePath("/admin/courses");
     revalidatePath("/courses");
@@ -93,26 +126,29 @@ export async function updateCourse(courseId: string, formData: FormData): Promis
     const title = String(formData.get("title") ?? "").trim();
     const description = String(formData.get("description") ?? "").trim();
     const image_url = String(formData.get("image_url") ?? "").trim();
-    const sequence_order = Number(formData.get("sequence_order") ?? 0);
+    const positionRaw = Number(formData.get("sequence_order") ?? 1);
     const slug = String(formData.get("slug") ?? "").trim();
 
     if (!title) return { ok: false, error: "Title is required." };
     if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) {
       return { ok: false, error: "Slug must be lowercase-kebab-case." };
     }
-    if (!Number.isFinite(sequence_order)) {
-      return { ok: false, error: "Sequence order must be a number." };
+    if (!Number.isFinite(positionRaw)) {
+      return { ok: false, error: "Position must be a number." };
     }
 
     const { error } = await supabase
       .from("courses")
-      .update({ title, slug, description: description || null, image_url: image_url || null, sequence_order })
+      .update({ title, slug, description: description || null, image_url: image_url || null })
       .eq("id", courseId);
 
     if (error) {
       if (error.code === "23505") return { ok: false, error: `A course with slug "${slug}" already exists.` };
       return { ok: false, error: error.message };
     }
+
+    const { error: reorderErr } = await reorderEntities(supabase, "courses", null, null, courseId, positionRaw - 1);
+    if (reorderErr) return { ok: false, error: reorderErr };
 
     revalidatePath("/admin/courses");
     revalidatePath(`/admin/courses/${courseId}`);
@@ -145,7 +181,7 @@ export async function createTopic(courseId: string, formData: FormData): Promise
     const supabase = createSupabaseServerClient();
 
     const title = String(formData.get("title") ?? "").trim();
-    const sequence_order = Number(formData.get("sequence_order") ?? 0);
+    const positionRaw = Number(formData.get("sequence_order") ?? 1);
     let slug = String(formData.get("slug") ?? "").trim();
 
     if (!title) return { ok: false, error: "Title is required." };
@@ -153,13 +189,13 @@ export async function createTopic(courseId: string, formData: FormData): Promise
     if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) {
       return { ok: false, error: "Slug must be lowercase-kebab-case." };
     }
-    if (!Number.isFinite(sequence_order)) {
-      return { ok: false, error: "Sequence order must be a number." };
+    if (!Number.isFinite(positionRaw)) {
+      return { ok: false, error: "Position must be a number." };
     }
 
     const { data, error } = await supabase
       .from("topics")
-      .insert({ course_id: courseId, title, slug, sequence_order })
+      .insert({ course_id: courseId, title, slug, sequence_order: 999999 })
       .select("id")
       .single();
 
@@ -167,6 +203,9 @@ export async function createTopic(courseId: string, formData: FormData): Promise
       if (error.code === "23505") return { ok: false, error: `A topic with slug "${slug}" already exists in this course.` };
       return { ok: false, error: error.message };
     }
+
+    const { error: reorderErr } = await reorderEntities(supabase, "topics", "course_id", courseId, data.id, positionRaw - 1);
+    if (reorderErr) return { ok: false, error: reorderErr };
 
     revalidatePath(`/admin/courses/${courseId}`);
     revalidatePath("/courses");
@@ -183,25 +222,25 @@ export async function updateTopic(topicId: string, courseId: string, formData: F
 
     const title = String(formData.get("title") ?? "").trim();
     const slug = String(formData.get("slug") ?? "").trim();
-    const sequence_order = Number(formData.get("sequence_order") ?? 0);
+    const positionRaw = Number(formData.get("sequence_order") ?? 1);
 
     if (!title) return { ok: false, error: "Title is required." };
     if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) {
       return { ok: false, error: "Slug must be lowercase-kebab-case." };
     }
-    if (!Number.isFinite(sequence_order)) {
-      return { ok: false, error: "Sequence order must be a number." };
+    if (!Number.isFinite(positionRaw)) {
+      return { ok: false, error: "Position must be a number." };
     }
 
-    const { error } = await supabase
-      .from("topics")
-      .update({ title, slug, sequence_order })
-      .eq("id", topicId);
+    const { error } = await supabase.from("topics").update({ title, slug }).eq("id", topicId);
 
     if (error) {
       if (error.code === "23505") return { ok: false, error: `A topic with slug "${slug}" already exists in this course.` };
       return { ok: false, error: error.message };
     }
+
+    const { error: reorderErr } = await reorderEntities(supabase, "topics", "course_id", courseId, topicId, positionRaw - 1);
+    if (reorderErr) return { ok: false, error: reorderErr };
 
     revalidatePath(`/admin/courses/${courseId}`);
     revalidatePath("/courses");
@@ -237,11 +276,11 @@ export async function createSubtopic(
     const supabase = createSupabaseServerClient();
 
     const title = String(formData.get("title") ?? "").trim();
-    const sequence_order = Number(formData.get("sequence_order") ?? 0);
+    const positionRaw = Number(formData.get("sequence_order") ?? 1);
     const contentRaw = String(formData.get("content_json") ?? "[]");
 
     if (!title) return { ok: false, error: "Title is required." };
-    if (!Number.isFinite(sequence_order)) return { ok: false, error: "Sequence order must be a number." };
+    if (!Number.isFinite(positionRaw)) return { ok: false, error: "Position must be a number." };
 
     let content_json: ContentBlock[];
     try {
@@ -258,11 +297,14 @@ export async function createSubtopic(
 
     const { data, error } = await supabase
       .from("subtopics")
-      .insert({ topic_id: topicId, title, sequence_order, content_json })
+      .insert({ topic_id: topicId, title, sequence_order: 999999, content_json })
       .select("id")
       .single();
 
     if (error) return { ok: false, error: error.message };
+
+    const { error: reorderErr } = await reorderEntities(supabase, "subtopics", "topic_id", topicId, data.id, positionRaw - 1);
+    if (reorderErr) return { ok: false, error: reorderErr };
 
     revalidatePath(`/admin/courses/${courseId}`);
     revalidatePath("/courses");
@@ -283,11 +325,11 @@ export async function updateSubtopic(
     const supabase = createSupabaseServerClient();
 
     const title = String(formData.get("title") ?? "").trim();
-    const sequence_order = Number(formData.get("sequence_order") ?? 0);
+    const positionRaw = Number(formData.get("sequence_order") ?? 1);
     const contentRaw = String(formData.get("content_json") ?? "[]");
 
     if (!title) return { ok: false, error: "Title is required." };
-    if (!Number.isFinite(sequence_order)) return { ok: false, error: "Sequence order must be a number." };
+    if (!Number.isFinite(positionRaw)) return { ok: false, error: "Position must be a number." };
 
     let content_json: ContentBlock[];
     try {
@@ -302,12 +344,12 @@ export async function updateSubtopic(
       return { ok: false, error: "content_json is not valid JSON." };
     }
 
-    const { error } = await supabase
-      .from("subtopics")
-      .update({ title, sequence_order, content_json })
-      .eq("id", subtopicId);
+    const { error } = await supabase.from("subtopics").update({ title, content_json }).eq("id", subtopicId);
 
     if (error) return { ok: false, error: error.message };
+
+    const { error: reorderErr } = await reorderEntities(supabase, "subtopics", "topic_id", topicId, subtopicId, positionRaw - 1);
+    if (reorderErr) return { ok: false, error: reorderErr };
 
     revalidatePath(`/admin/courses/${courseId}`);
     revalidatePath("/courses");
@@ -510,17 +552,7 @@ export async function appendTopicsToCourse(rawJson: string): Promise<
 }
 
 // ---------------- One-time recovery: import any legacy modules missing from the CMS ----------------
-// Some modules in lib/allModules.ts never made it into the CMS during the
-// original migration. This re-scans lib/allModules.ts, skips any module
-// whose slug ALREADY exists as a topic under the target course (so it
-// never creates duplicates), and imports only what's missing -- as new
-// TOPICS inside the existing course, via admin_bulk_import_topics_into_course.
-//
-// normalizeLegacyImage is a top-level module-scope const (not a nested
-// `function` declaration inside the try block below) -- Next.js compiles
-// Server Action files in strict mode targeting ES5, which disallows
-// function declarations inside blocks. An arrow function assigned to a
-// const has no such restriction.
+
 const normalizeLegacyImage = (img: Record<string, unknown>) => {
   const src = img.src ?? img.url ?? img.imageUrl ?? img.href ?? img.path;
   if (typeof src !== "string" || !src.trim()) return null;
