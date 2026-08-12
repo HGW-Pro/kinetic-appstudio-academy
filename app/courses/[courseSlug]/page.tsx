@@ -87,7 +87,6 @@ export default function CoursePage({ params }: { params: { courseSlug: string } 
   }, [user, authLoading]);
 
   useEffect(() => {
-    if (legacyCourse) return;
     (async () => {
       // Single nested/embedded query: PostgREST resolves course, topics,
       // subtopics, and quizzes in one HTTP round trip via foreign-table
@@ -138,9 +137,12 @@ export default function CoursePage({ params }: { params: { courseSlug: string } 
       setCmsTopics(enriched);
       setCmsChecked(true);
     })();
-  }, [legacyCourse, params.courseSlug]);
+  }, [params.courseSlug]);
 
-  if (legacyCourse) {
+  // Published CMS content is the canonical student-facing curriculum. The
+  // legacy course branch remains only as a safe compatibility fallback for
+  // an as-yet-unmigrated legacy slug.
+  if (cmsChecked && !cmsCourse && legacyCourse) {
     const course = legacyCourse;
     const highestUnlocked = (() => {
       if (!user) return 0;

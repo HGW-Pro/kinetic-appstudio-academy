@@ -45,7 +45,6 @@ export default function TopicQuizPage({
   }, [isLegacy, user, authLoading, legacyTopic]);
 
   useEffect(() => {
-    if (isLegacy) return;
     (async () => {
       const { data: course } = await supabase
         .from("courses")
@@ -88,9 +87,13 @@ export default function TopicQuizPage({
       }
       setCmsChecked(true);
     })();
-  }, [isLegacy, params.courseSlug, params.topicSlug]);
+  }, [params.courseSlug, params.topicSlug]);
 
-  if (isLegacy) {
+  // Use the CMS whenever the published course/topic exists. The legacy quiz
+  // path is intentionally retained only as a compatibility fallback.
+  const hasCmsQuizRoute = cmsChecked && !!cmsCourseTitle && !!cmsTopicTitle;
+
+  if (cmsChecked && !hasCmsQuizRoute && isLegacy) {
     const course = legacyCourse!;
     const topic = legacyTopic!;
     const idx = course.topics.findIndex((t) => t.slug === topic.slug);
