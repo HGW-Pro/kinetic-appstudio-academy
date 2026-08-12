@@ -3,10 +3,9 @@
 
 export type ContentBlockType = "SlideText" | "VisualMockup" | "FlowDiagram";
 
-// SlideText.body is now an ORDERED array of nodes rather than a flat
-// string[] with a separate images[] array. This is what allows an admin
-// to insert an image after a specific paragraph instead of images always
-// being dumped in a gallery below all the text.
+// SlideText.body is an ORDERED array of nodes rather than a flat string[]
+// with a separate images[] array, so an image can be placed after a
+// specific paragraph instead of always being grouped at the end.
 export interface ParagraphNode {
   type: "paragraph";
   text: string;
@@ -86,7 +85,7 @@ export interface QuizRecord {
   updated_at: string;
 }
 
-// ---------- Bulk import payload shape ----------
+// ---------- Bulk import payload shape (single course) ----------
 
 export interface BulkImportSubtopic {
   title: string;
@@ -342,11 +341,6 @@ export function validateBulkImportPayload(raw: unknown): BulkImportPayload {
 }
 
 // ---------- Shuffle helpers ----------
-// Fisher-Yates shuffle. Used to randomize a freshly-authored/imported
-// quiz question's option order at SAVE time (not just at quiz-attempt
-// time in QuizEngine), so the stored data itself never has a predictable
-// "correct answer is always position N" pattern baked in from how an
-// admin (or an AI generating bulk-import JSON) happened to type options.
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr];
   for (let i = copy.length - 1; i > 0; i--) {
@@ -378,4 +372,89 @@ export function shuffleBulkImportPayload(payload: BulkImportPayload): BulkImport
       })),
     })),
   };
+}
+
+// ---------- Multi-course bulk import ----------
+// AI-generated JSON can describe several full courses in one paste. Each
+// course still imports independently server-side (see
+// admin_bulk_import_courses SQL function) so one malformed course doesn't
+// block the rest.
+
+export interface MultiCourseBulkImportPayload {
+  courses: BulkImportPayload[];
+}
+
+function validateBulkImportPayloadPrefixed(raw: unknown, prefix: string): BulkImportPayload {
+  try {
+    return validateBulkImportPayload(raw);
+  } catch (err) {
+    if (err instanceof ValidationError) {
+      throw new ValidationError(`${prefix}.${err.path}`, err.message.split(": ").slice(1).join(": ") || err.message);
+    }
+    throw err;
+  }
+}
+
+export function validateMultiCourseBulkImportPayload(raw: unknown): MultiCourseBulkImportPayload {
+  if (typeof raw !== "object" || raw === null) {
+    throw new ValidationError("root", "payload must be a JSON object");
+  }
+  const r = raw as Record<string, unknown>;
+
+  // Backward compatible: a single { course, topics } object (no wrapping
+  // "courses" array) is treated as a one-item batch.
+  if (r.course !== undefined && r.courses === undefined) {
+    return { courses: [validateBulkImportPayload(raw)] };
+  }
+
+  const coursesRaw = assertArray(r.courses, "courses");
+  if (coursesRaw.length === 0) {
+    throw new ValidationError("courses", "must contain at least one course");
+  }
+  return { courses: coursesRaw.map((c, i) => validateBulkImportPayloadPrefixed(c, `courses[${i}]`)) };
+}
+
+// Resolves an image reference that may be either:
+//   - a full URL (http/https) -> returned unchanged
+//   - a bare filename or storage path (e.g. "LoginScreen.png" or
+//     "uploads/LoginScreen.png") -> prefixed with the course-assets public
+//     storage URL, so AI-generated JSON can reference images by filename
+//     without needing to know the Supabase project ref.
+export function resolveImageSrc(src: string, supabaseUrl: string): string {
+  if (/^https?:\/\//i.test(src)) return src;
+  const base = supabaseUrl.replace(/\/+$/, "");
+  const cleanPath = src.replace(/^\/+/, "");
+  return `${base}/storage/v1/object/public/course-assets/${cleanPath}`;
+}
+
+export function resolveImagesInPayload(payload: BulkImportPayload, supabaseUrl: string): BulkImportPayload {
+  return {
+    ...payload,
+    course: {
+      ...payload.course,
+      image_url: payload.course.image_url ? resolveImageSrc(payload.course.image_url, supabaseUrl) : undefined,
+    },
+    topics: payload.topics.map((t) => ({
+      ...t,
+      subtopics: t.subtopics.map((s) => ({
+        ...s,
+        content_json: s.content_json.map((block) => {
+          if (block.type !== "SlideText") return block;
+          return {
+            ...block,
+            body: block.body.map((node) =>
+              node.type === "image" ? { ...node, src: resolveImageSrc(node.src, supabaseUrl) } : node
+            ),
+          };
+        }),
+      })),
+    })),
+  };
+}
+
+export function resolveImagesInMultiPayload(
+  payload: MultiCourseBulkImportPayload,
+  supabaseUrl: string
+): MultiCourseBulkImportPayload {
+  return { courses: payload.courses.map((c) => resolveImagesInPayload(c, supabaseUrl)) };
 }

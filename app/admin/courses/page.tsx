@@ -20,8 +20,8 @@ export default async function AdminCoursesPage() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">Courses</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Create courses manually, or bulk-import a full course (topics, subtopics, quizzes) from
-          AI-generated JSON below.
+          Create courses manually, or bulk-import one or many full courses (topics, subtopics, quizzes)
+          from AI-generated JSON below.
         </p>
       </div>
 
@@ -41,13 +41,29 @@ export default async function AdminCoursesPage() {
               <Link
                 key={c.id}
                 href={`/admin/courses/${c.id}`}
-                className="flex items-center justify-between rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-slate-400"
+                className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm transition hover:border-slate-400"
               >
-                <div>
-                  <p className="font-semibold text-slate-900">{c.title}</p>
+                {c.image_url ? (
+                  <img
+                    src={c.image_url}
+                    alt={c.title}
+                    className="h-14 w-14 shrink-0 rounded-md object-cover"
+                  />
+                ) : (
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-slate-100 text-lg text-slate-300">
+                    🖼️
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-slate-900">{c.title}</p>
                   <p className="text-xs text-slate-500">/{c.slug}</p>
+                  {c.description ? (
+                    <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{c.description}</p>
+                  ) : (
+                    <p className="mt-0.5 text-xs italic text-slate-300">No description yet</p>
+                  )}
                 </div>
-                <span className="text-slate-400">→</span>
+                <span className="shrink-0 text-slate-400">→</span>
               </Link>
             ))}
             {(!courses || courses.length === 0) && !error && (

@@ -356,10 +356,6 @@ export async function upsertQuiz(
       return { ok: false, error: "questions_json is not valid JSON." };
     }
 
-    // Shuffle each question's option order at save time, so the stored
-    // data itself never carries a predictable "correct answer is always
-    // position N" pattern, on top of QuizEngine also reshuffling per
-    // attempt on the student side.
     const shuffled = shuffleQuestions(questions_json);
 
     const { error } = await supabase
@@ -375,7 +371,7 @@ export async function upsertQuiz(
   }
 }
 
-// ---------------- Bulk import (atomic via Postgres RPC) ----------------
+// ---------------- Bulk import: single course (legacy, still used by any old callers) ----------------
 
 export async function bulkImportCourse(rawJson: string): Promise<ActionResult<{ courseId: string }>> {
   try {
@@ -401,6 +397,57 @@ export async function bulkImportCourse(rawJson: string): Promise<ActionResult<{ 
     revalidatePath("/admin/courses");
     revalidatePath("/courses");
     return { ok: true, data: { courseId: data as string } };
+  } catch (err) {
+    return actionError(err);
+  }
+}
+
+// ---------------- Bulk import: multiple courses in one paste ----------------
+// Each course imports independently server-side (see the
+// admin_bulk_import_courses Postgres function) — one malformed course
+// doesn't block the others, and the caller gets back a per-course report.
+
+export async function bulkImportCourses(rawJson: string): Promise<
+  ActionResult<{ imported: { title: string; id: string }[]; errors: { title: string; error: string }[] }>
+> {
+  try {
+    await assertAdminOrThrow();
+    const supabase = createSupabaseServerClient();
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawJson);
+    } catch {
+      return { ok: false, error: "The pasted text is not valid JSON." };
+    }
+
+    const { validateMultiCourseBulkImportPayload, resolveImagesInMultiPayload } = await import("./types");
+
+    const payload = validateMultiCourseBulkImportPayload(parsed);
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const resolved = resolveImagesInMultiPayload(payload, supabaseUrl);
+    const shuffled = { courses: resolved.courses.map((c) => shuffleBulkImportPayload(c)) };
+
+    const { data, error } = await supabase.rpc("admin_bulk_import_courses", { payload: shuffled });
+
+    if (error) {
+      return { ok: false, error: `Import failed: ${error.message}` };
+    }
+
+    const result = data as { imported: { title: string; id: string }[]; errors: { title: string; error: string }[] };
+
+    revalidatePath("/admin/courses");
+    revalidatePath("/courses");
+
+    if (result.imported.length === 0) {
+      return {
+        ok: false,
+        error: `No courses were imported.\n${result.errors.map((e) => `"${e.title}": ${e.error}`).join("\n")}`,
+        data: result,
+      };
+    }
+
+    return { ok: true, data: result };
   } catch (err) {
     return actionError(err);
   }
