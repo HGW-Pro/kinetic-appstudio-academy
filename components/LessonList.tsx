@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import type { Lesson } from "../lib/curriculum";
-import { loadLocalProgress, markLessonComplete } from "../lib/progress";
+import { loadLocalProgress, loadRemoteProgress, markLessonComplete } from "../lib/progress";
 import { useAuth } from "./AuthProvider";
 import { playSound } from "../lib/sounds";
 import FlowDiagramView from "./FlowDiagram";
@@ -33,14 +33,26 @@ export default function LessonList({
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    const state = loadLocalProgress();
-    const done = state[moduleSlug]?.lessonsCompleted ?? [];
-    setCompleted(done);
-    const firstIncomplete = lessons.find((l) => !done.includes(l.id));
-    setExpandedId(firstIncomplete ? firstIncomplete.id : lessons[lessons.length - 1]?.id ?? "");
-    setMounted(true);
+    if (authLoading) return;
+    let cancelled = false;
+    (async () => {
+      // Signed-in users must load their completed lessons from Supabase —
+      // localStorage alone doesn't reflect what's actually saved to their
+      // account (different device/browser, cleared cache, etc.), which was
+      // causing completed lessons to show as incomplete again after refresh.
+      const state = user ? await loadRemoteProgress(user.id) : loadLocalProgress();
+      if (cancelled) return;
+      const done = state[moduleSlug]?.lessonsCompleted ?? [];
+      setCompleted(done);
+      const firstIncomplete = lessons.find((l) => !done.includes(l.id));
+      setExpandedId(firstIncomplete ? firstIncomplete.id : lessons[lessons.length - 1]?.id ?? "");
+      setMounted(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [moduleSlug]);
+  }, [moduleSlug, user, authLoading]);
 
   if (!mounted) return null;
 
