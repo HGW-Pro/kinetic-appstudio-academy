@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useAuth } from "../AuthProvider";
 import { loadRemoteProgress, enrollInModule } from "../../lib/progress";
 import type { TopicRecord } from "../../lib/admin/types";
-import { cmsModuleSlug } from "../../lib/cms/queries";
+import { cmsModuleSlug } from "../../lib/cms/shared";
 
 export default function CmsAccessGate({
   courseSlug,

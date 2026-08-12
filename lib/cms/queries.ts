@@ -1,6 +1,7 @@
 import "server-only";
 import { createSupabaseServerClient } from "../supabase/server";
 import type { CourseRecord, TopicRecord, SubtopicRecord, QuizRecord } from "../admin/types";
+import { cmsModuleSlug } from "./shared";
 
 // Read-only fetchers for the PUBLIC student-facing side of the CMS
 // (courses/topics/subtopics/quizzes tables). All four tables have a
@@ -110,15 +111,6 @@ export async function getPublicQuizForSubtopic(subtopicId: string): Promise<Quiz
   return data ?? null;
 }
 
-// Progress in lesson_progress/quiz_attempts/enrollments is keyed by free-
-// text module_slug + lesson_id (see lib/progress.ts). For CMS content we
-// scope module_slug to the specific course+topic (so progress from a CMS
-// topic never collides with a legacy hardcoded module of the same name),
-// and use the subtopic's UUID as lesson_id.
-export function cmsModuleSlug(courseSlug: string, topicSlug: string): string {
-  return `cms:${courseSlug}:${topicSlug}`;
-}
-
 export async function getPublicQuizzesForSubtopics(subtopicIds: string[]): Promise<Record<string, QuizRecord>> {
   if (subtopicIds.length === 0) return {};
   const supabase = createSupabaseServerClient();
@@ -135,3 +127,9 @@ export async function getPublicQuizzesForSubtopics(subtopicIds: string[]): Promi
   for (const q of data ?? []) map[q.subtopic_id] = q;
   return map;
 }
+
+// Re-exported so any existing `import { cmsModuleSlug } from "../cms/queries"`
+// call site keeps working unchanged -- the actual implementation now lives
+// in ./shared (no "server-only"), so client components should import it
+// from there directly instead.
+export { cmsModuleSlug };
