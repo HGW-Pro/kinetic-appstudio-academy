@@ -123,7 +123,7 @@ export default function DangerZoneClient({ courses }: { courses: CourseTree[] })
                     <DeleteButton
                       label="Delete Topic"
                       confirmText={`Delete topic "${topic.title}" and all ${topic.subtopics.length} subtopic(s) and their quizzes? This cannot be undone.`}
-                      onDelete={() => deleteTopicAction(topic.id)}
+                      onDelete={() => deleteTopicAction(topic.id, course.id)}
                     />
                   </div>
 
@@ -153,7 +153,7 @@ export default function DangerZoneClient({ courses }: { courses: CourseTree[] })
                               confirmText={`Delete subtopic "${subtopic.title}"${
                                 subtopic.quizId ? " and its quiz" : ""
                               }? This cannot be undone.`}
-                              onDelete={() => deleteSubtopicAction(subtopic.id)}
+                              onDelete={() => deleteSubtopicAction(subtopic.id, course.id)}
                             />
                           </span>
                         </div>
