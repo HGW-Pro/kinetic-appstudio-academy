@@ -3,6 +3,7 @@ import { createSupabaseServerClient } from "../../../lib/supabase/server";
 import type { CourseRecord } from "../../../lib/admin/types";
 import CourseForm from "../../../components/admin/CourseForm";
 import BulkImportForm from "../../../components/admin/BulkImportForm";
+import MigrationButton from "../../../components/admin/MigrationButton";
 
 export const dynamic = "force-dynamic";
 
@@ -51,7 +52,8 @@ export default async function AdminCoursesPage() {
             ))}
             {(!courses || courses.length === 0) && !error && (
               <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
-                No courses yet. Create one on the right, or use Bulk Import below.
+                No courses yet. Create one on the right, run the one-time migration below, or use
+                Bulk Import.
               </p>
             )}
           </div>
@@ -62,6 +64,12 @@ export default async function AdminCoursesPage() {
           <CourseForm />
         </section>
       </div>
+
+      {(!courses || courses.length === 0) && (
+        <section>
+          <MigrationButton />
+        </section>
+      )}
 
       <section>
         <BulkImportForm />
