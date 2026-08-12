@@ -510,6 +510,28 @@ export async function appendTopicsToCourse(rawJson: string): Promise<
 }
 
 // ---------------- One-time recovery: import any legacy modules missing from the CMS ----------------
+// Some modules in lib/allModules.ts never made it into the CMS during the
+// original migration. This re-scans lib/allModules.ts, skips any module
+// whose slug ALREADY exists as a topic under the target course (so it
+// never creates duplicates), and imports only what's missing -- as new
+// TOPICS inside the existing course, via admin_bulk_import_topics_into_course.
+//
+// normalizeLegacyImage is a top-level module-scope const (not a nested
+// `function` declaration inside the try block below) -- Next.js compiles
+// Server Action files in strict mode targeting ES5, which disallows
+// function declarations inside blocks. An arrow function assigned to a
+// const has no such restriction.
+const normalizeLegacyImage = (img: Record<string, unknown>) => {
+  const src = img.src ?? img.url ?? img.imageUrl ?? img.href ?? img.path;
+  if (typeof src !== "string" || !src.trim()) return null;
+  const alt = img.alt ?? img.title ?? img.caption ?? "Lesson image";
+  const caption = img.caption ?? img.description ?? img.title;
+  return {
+    src,
+    alt: typeof alt === "string" ? alt : "Lesson image",
+    caption: typeof caption === "string" ? caption : undefined,
+  };
+};
 
 export async function importMissingModulesIntoCourse(
   targetCourseSlug: string
@@ -565,14 +587,6 @@ export async function importMissingModulesIntoCourse(
     const { validateAppendTopicsPayload, resolveImagesInAppendPayload, shuffleAppendTopicsPayload } = await import(
       "./types"
     );
-
-    function normalizeLegacyImage(img: Record<string, unknown>) {
-      const src = img.src ?? img.url ?? img.imageUrl ?? img.href ?? img.path;
-      if (typeof src !== "string" || !src.trim()) return null;
-      const alt = img.alt ?? img.title ?? img.caption ?? "Lesson image";
-      const caption = img.caption ?? img.description ?? img.title;
-      return { src, alt: typeof alt === "string" ? alt : "Lesson image", caption: typeof caption === "string" ? caption : undefined };
-    }
 
     for (const mod of legacyModules) {
       if (existingSlugs.has(mod.slug)) {
