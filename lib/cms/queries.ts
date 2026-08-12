@@ -140,9 +140,7 @@ export interface CmsCourseWithStats extends CourseRecord {
 
 // Same published-only course list as getCmsCourses(), but enriched with
 // topic/subtopic/quiz-question counts -- mirrors the metadata row the
-// premium course card already displays for the legacy hardcoded courses
-// (course.topics.length, totalSubtopics, totalQuizQs), computed here from
-// the live database instead.
+// premium course card already displays for the legacy hardcoded courses.
 export async function getCmsCoursesWithStats(): Promise<CmsCourseWithStats[]> {
   const supabase = createSupabaseServerClient();
   const courses = await getPublicCourses();
@@ -192,6 +190,82 @@ export async function getCmsCoursesWithStats(): Promise<CmsCourseWithStats[]> {
     subtopicCount: subtopicCountByCourse.get(c.id) ?? 0,
     quizQuestionCount: quizQuestionCountByCourse.get(c.id) ?? 0,
   }));
+}
+
+export interface CmsTopicWithStats {
+  id: string;
+  title: string;
+  slug: string;
+  sequence_order: number;
+  difficulty: string;
+  estMinutes: number;
+  subtopicCount: number;
+  quizQuestionCount: number;
+}
+
+// Topics for a course, enriched with the same metrics the legacy hardcoded
+// topic cards show (subtopic count, estimated duration, quiz question
+// count) so dynamic Supabase-backed courses render identical rich cards
+// instead of a plain numbered list.
+//
+// Graceful fallbacks: difficulty defaults to "Standard" when null (the
+// topics.difficulty column is nullable by design); estMinutes defaults to
+// ~5 minutes per subtopic when topics.est_minutes hasn't been set -- the
+// metrics bar always renders something rather than disappearing just
+// because a topic hasn't been backfilled with that metadata yet.
+export async function getPublicTopicsWithStats(courseId: string): Promise<CmsTopicWithStats[]> {
+  const supabase = createSupabaseServerClient();
+
+  const { data: topics, error } = await supabase
+    .from("topics")
+    .select("id, title, slug, sequence_order, difficulty, est_minutes")
+    .eq("course_id", courseId)
+    .order("sequence_order", { ascending: true });
+
+  if (error || !topics || topics.length === 0) {
+    if (error) console.error("getPublicTopicsWithStats failed", error);
+    return [];
+  }
+
+  const topicIds = topics.map((t) => t.id);
+
+  const { data: subtopics } = await supabase
+    .from("subtopics")
+    .select("id, topic_id")
+    .in("topic_id", topicIds);
+
+  const subtopicsByTopic = new Map<string, string[]>();
+  for (const s of subtopics ?? []) {
+    const list = subtopicsByTopic.get(s.topic_id) ?? [];
+    list.push(s.id);
+    subtopicsByTopic.set(s.topic_id, list);
+  }
+
+  const allSubtopicIds = (subtopics ?? []).map((s) => s.id);
+  const { data: quizzes } = allSubtopicIds.length
+    ? await supabase.from("quizzes").select("subtopic_id, questions_json").in("subtopic_id", allSubtopicIds)
+    : { data: [] as { subtopic_id: string; questions_json: unknown }[] };
+
+  const quizCountBySubtopic = new Map<string, number>();
+  for (const q of quizzes ?? []) {
+    quizCountBySubtopic.set(q.subtopic_id, Array.isArray(q.questions_json) ? q.questions_json.length : 0);
+  }
+
+  return topics.map((t) => {
+    const subtopicIds = subtopicsByTopic.get(t.id) ?? [];
+    const subtopicCount = subtopicIds.length;
+    const quizQuestionCount = subtopicIds.reduce((sum, id) => sum + (quizCountBySubtopic.get(id) ?? 0), 0);
+    return {
+      id: t.id,
+      title: t.title,
+      slug: t.slug,
+      sequence_order: t.sequence_order,
+      difficulty: t.difficulty && t.difficulty.trim() ? t.difficulty : "Standard",
+      estMinutes: t.est_minutes && t.est_minutes > 0 ? t.est_minutes : Math.max(subtopicCount * 5, 5),
+      subtopicCount,
+      quizQuestionCount,
+    };
+  });
 }
 
 export { cmsModuleSlug };
