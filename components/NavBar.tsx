@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "./AuthProvider";
+import { useIsAdmin } from "./useIsAdmin";
 
 const links = [
   { href: "/", label: "Courses" },
@@ -16,6 +17,10 @@ export default function NavBar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, signOut, loading } = useAuth();
+  // Fails closed to `false` until the employees.role check resolves, so
+  // there's no flash of the Admin Panel link before it's confirmed --
+  // it simply appears once the check completes for an actual admin.
+  const isAdmin = useIsAdmin(user?.id);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   function closeMobile() {
@@ -59,6 +64,18 @@ export default function NavBar() {
               </Link>
             );
           })}
+          {!loading && isAdmin && (
+            <Link
+              href="/admin/courses"
+              className={`rounded-md border border-[var(--primary)]/30 px-3.5 py-2 text-sm font-semibold transition ${
+                pathname?.startsWith("/admin")
+                  ? "bg-[var(--primary)]/15 text-[var(--primary)]"
+                  : "bg-[var(--primary)]/[0.06] text-[var(--primary)] hover:bg-[var(--primary)]/[0.12]"
+              }`}
+            >
+              ⚙ Admin Panel
+            </Link>
+          )}
         </nav>
 
         <div className="flex items-center gap-2">
@@ -125,6 +142,19 @@ export default function NavBar() {
                 </Link>
               );
             })}
+            {!loading && isAdmin && (
+              <Link
+                href="/admin/courses"
+                onClick={closeMobile}
+                className={`rounded-md px-3.5 py-2.5 text-sm font-semibold transition ${
+                  pathname?.startsWith("/admin")
+                    ? "bg-[var(--primary)]/15 text-[var(--primary)]"
+                    : "text-[var(--primary)] hover:bg-[var(--primary)]/[0.08]"
+                }`}
+              >
+                ⚙ Admin Panel
+              </Link>
+            )}
             <div className="mt-2 border-t border-[var(--border)] pt-2">
               {!loading && user ? (
                 <button

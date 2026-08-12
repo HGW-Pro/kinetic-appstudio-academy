@@ -1,7 +1,11 @@
 import Link from "next/link";
-import { courses } from "../lib/courses";
+import { getCmsCoursesWithStats } from "../lib/cms/queries";
 
-export default function HomePage() {
+export const revalidate = 0;
+
+export default async function HomePage() {
+  const courses = await getCmsCoursesWithStats();
+
   return (
     <div className="space-y-12">
       <section className="hero-band relative overflow-hidden rounded-2xl px-6 py-16 text-center text-white sm:px-12">
@@ -20,33 +24,37 @@ export default function HomePage() {
       <section>
         <h2 className="mb-6 text-2xl font-semibold text-[var(--text-hi)]">Available Courses</h2>
         <div className="grid gap-6 sm:grid-cols-2">
-          {courses.map((course) => {
-            const totalSubtopics = course.topics.reduce((n, t) => n + t.lessons.length, 0);
-            const totalQuizQs = course.topics.reduce((n, t) => n + t.quiz.length, 0);
-            return (
-              <Link
-                key={course.slug}
-                href={`/courses/${course.slug}`}
-                className="group glass-card glow-border flex flex-col justify-between rounded-2xl p-8 transition hover:-translate-y-1 hover:shadow-lg"
-              >
-                <div>
-                  <span className="flex h-14 w-14 items-center justify-center rounded-xl bg-[var(--primary)] text-2xl text-white">
-                    {course.icon}
+          {courses.map((course) => (
+            <Link
+              key={course.id}
+              href={`/courses/${course.slug}`}
+              className="group glass-card glow-border flex flex-col justify-between rounded-2xl p-8 transition hover:-translate-y-1 hover:shadow-lg"
+            >
+              <div>
+                {course.image_url ? (
+                  <span className="flex h-14 w-14 items-center justify-center overflow-hidden rounded-xl bg-[var(--surface-2)]">
+                    <img src={course.image_url} alt={course.title} className="h-full w-full object-cover" />
                   </span>
-                  <h3 className="mt-4 text-xl font-bold text-[var(--text-hi)] group-hover:text-[var(--primary)]">
-                    {course.title}
-                  </h3>
-                  <p className="mt-2 text-sm text-[var(--text-mid)]">{course.tagline}</p>
-                </div>
-                <div className="mt-6 flex items-center justify-between text-xs text-[var(--text-lo)]">
-                  <span>{course.topics.length} topics</span>
-                  <span>{totalSubtopics} subtopics</span>
-                  <span>{totalQuizQs} quiz Qs</span>
-                  <span className="text-[var(--primary)] transition group-hover:translate-x-1">→</span>
-                </div>
-              </Link>
-            );
-          })}
+                ) : (
+                  <span className="flex h-14 w-14 items-center justify-center rounded-xl bg-[var(--primary)] text-2xl text-white">
+                    📚
+                  </span>
+                )}
+                <h3 className="mt-4 text-xl font-bold text-[var(--text-hi)] group-hover:text-[var(--primary)]">
+                  {course.title}
+                </h3>
+                {course.description && (
+                  <p className="mt-2 text-sm text-[var(--text-mid)]">{course.description}</p>
+                )}
+              </div>
+              <div className="mt-6 flex items-center justify-between text-xs text-[var(--text-lo)]">
+                <span>{course.topicCount} topics</span>
+                <span>{course.subtopicCount} subtopics</span>
+                <span>{course.quizQuestionCount} quiz Qs</span>
+                <span className="text-[var(--primary)] transition group-hover:translate-x-1">→</span>
+              </div>
+            </Link>
+          ))}
 
           <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-[var(--border-strong)] p-8 text-center opacity-70">
             <span className="text-3xl">➕</span>

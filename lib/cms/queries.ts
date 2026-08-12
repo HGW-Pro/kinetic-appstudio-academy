@@ -132,4 +132,66 @@ export async function getPublicQuizzesForSubtopics(subtopicIds: string[]): Promi
 // catalog page: getCmsCourses() === getPublicCourses().
 export const getCmsCourses = getPublicCourses;
 
+export interface CmsCourseWithStats extends CourseRecord {
+  topicCount: number;
+  subtopicCount: number;
+  quizQuestionCount: number;
+}
+
+// Same published-only course list as getCmsCourses(), but enriched with
+// topic/subtopic/quiz-question counts -- mirrors the metadata row the
+// premium course card already displays for the legacy hardcoded courses
+// (course.topics.length, totalSubtopics, totalQuizQs), computed here from
+// the live database instead.
+export async function getCmsCoursesWithStats(): Promise<CmsCourseWithStats[]> {
+  const supabase = createSupabaseServerClient();
+  const courses = await getPublicCourses();
+  if (courses.length === 0) return [];
+
+  const courseIds = courses.map((c) => c.id);
+
+  const { data: topics } = await supabase.from("topics").select("id, course_id").in("course_id", courseIds);
+  const topicIds = (topics ?? []).map((t) => t.id);
+  const topicCourseMap = new Map((topics ?? []).map((t) => [t.id, t.course_id]));
+
+  const { data: subtopics } = topicIds.length
+    ? await supabase.from("subtopics").select("id, topic_id").in("topic_id", topicIds)
+    : { data: [] as { id: string; topic_id: string }[] };
+  const subtopicIds = (subtopics ?? []).map((s) => s.id);
+
+  const { data: quizzes } = subtopicIds.length
+    ? await supabase.from("quizzes").select("subtopic_id, questions_json").in("subtopic_id", subtopicIds)
+    : { data: [] as { subtopic_id: string; questions_json: unknown }[] };
+
+  const subtopicTopicMap = new Map((subtopics ?? []).map((s) => [s.id, s.topic_id]));
+
+  const topicCountByCourse = new Map<string, number>();
+  for (const t of topics ?? []) {
+    topicCountByCourse.set(t.course_id, (topicCountByCourse.get(t.course_id) ?? 0) + 1);
+  }
+
+  const subtopicCountByCourse = new Map<string, number>();
+  for (const s of subtopics ?? []) {
+    const courseId = topicCourseMap.get(s.topic_id);
+    if (courseId) subtopicCountByCourse.set(courseId, (subtopicCountByCourse.get(courseId) ?? 0) + 1);
+  }
+
+  const quizQuestionCountByCourse = new Map<string, number>();
+  for (const q of quizzes ?? []) {
+    const topicId = subtopicTopicMap.get(q.subtopic_id);
+    const courseId = topicId ? topicCourseMap.get(topicId) : undefined;
+    if (courseId) {
+      const count = Array.isArray(q.questions_json) ? q.questions_json.length : 0;
+      quizQuestionCountByCourse.set(courseId, (quizQuestionCountByCourse.get(courseId) ?? 0) + count);
+    }
+  }
+
+  return courses.map((c) => ({
+    ...c,
+    topicCount: topicCountByCourse.get(c.id) ?? 0,
+    subtopicCount: subtopicCountByCourse.get(c.id) ?? 0,
+    quizQuestionCount: quizQuestionCountByCourse.get(c.id) ?? 0,
+  }));
+}
+
 export { cmsModuleSlug };
