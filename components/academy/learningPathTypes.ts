@@ -39,4 +39,5 @@ export type SkillProgressItem = {
   id: string;
   name: string;
   percentage: number;
+  taggedUnitCount?: number;
 };

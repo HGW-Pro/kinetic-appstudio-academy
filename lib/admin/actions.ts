@@ -46,6 +46,23 @@ function revalidateCourseSurfaces(courseId?: string) {
   if (courseId) revalidatePath(`/admin/courses/${courseId}`);
 }
 
+function optionalPositiveInteger(value: FormDataEntryValue | null): number | null {
+  const numeric = Number(value ?? 0);
+  return Number.isFinite(numeric) && numeric > 0 ? Math.round(numeric) : null;
+}
+
+function stringArray(value: FormDataEntryValue | null): string[] {
+  const raw = String(value ?? "").trim();
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) return parsed.filter((item): item is string => typeof item === "string" && item.trim().length > 0).map((item) => item.trim());
+  } catch {
+    // Textareas can use a simple newline/comma list as a friendlier fallback.
+  }
+  return raw.split(/[\n,]/).map((item) => item.trim()).filter(Boolean);
+}
+
 async function reorderEntities(
   supabase: ReturnType<typeof createSupabaseServerClient>,
   table: "courses" | "topics" | "subtopics",
@@ -193,6 +210,11 @@ export async function createTopic(courseId: string, formData: FormData): Promise
     const title = String(formData.get("title") ?? "").trim();
     const positionRaw = Number(formData.get("sequence_order") ?? 1);
     let slug = String(formData.get("slug") ?? "").trim();
+    const difficulty = String(formData.get("difficulty") ?? "").trim();
+    const est_minutes = optionalPositiveInteger(formData.get("est_minutes"));
+    const learning_objectives = stringArray(formData.get("learning_objectives"));
+    const skills = stringArray(formData.get("skills"));
+    const prerequisite_topic_id = String(formData.get("prerequisite_topic_id") ?? "").trim() || null;
 
     if (!title) return { ok: false, error: "Title is required." };
     if (!slug) slug = slugify(title);
@@ -205,7 +227,7 @@ export async function createTopic(courseId: string, formData: FormData): Promise
 
     const { data, error } = await supabase
       .from("topics")
-      .insert({ course_id: courseId, title, slug, sequence_order: 999999 })
+      .insert({ course_id: courseId, title, slug, sequence_order: 999999, difficulty: difficulty || null, est_minutes, learning_objectives, skills, prerequisite_topic_id })
       .select("id")
       .single();
 
@@ -232,6 +254,11 @@ export async function updateTopic(topicId: string, courseId: string, formData: F
     const title = String(formData.get("title") ?? "").trim();
     const slug = String(formData.get("slug") ?? "").trim();
     const positionRaw = Number(formData.get("sequence_order") ?? 1);
+    const difficulty = String(formData.get("difficulty") ?? "").trim();
+    const est_minutes = optionalPositiveInteger(formData.get("est_minutes"));
+    const learning_objectives = stringArray(formData.get("learning_objectives"));
+    const skills = stringArray(formData.get("skills"));
+    const prerequisite_topic_id = String(formData.get("prerequisite_topic_id") ?? "").trim() || null;
 
     if (!title) return { ok: false, error: "Title is required." };
     if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) {
@@ -241,7 +268,7 @@ export async function updateTopic(topicId: string, courseId: string, formData: F
       return { ok: false, error: "Position must be a number." };
     }
 
-    const { error } = await supabase.from("topics").update({ title, slug }).eq("id", topicId);
+    const { error } = await supabase.from("topics").update({ title, slug, difficulty: difficulty || null, est_minutes, learning_objectives, skills, prerequisite_topic_id }).eq("id", topicId);
 
     if (error) {
       if (error.code === "23505") return { ok: false, error: `A topic with slug "${slug}" already exists in this course.` };
@@ -285,18 +312,23 @@ export async function createSubtopic(
     const title = String(formData.get("title") ?? "").trim();
     const positionRaw = Number(formData.get("sequence_order") ?? 1);
     const contentRaw = String(formData.get("content_json") ?? "[]");
+    const est_minutes = optionalPositiveInteger(formData.get("est_minutes"));
+    const learning_objectives = stringArray(formData.get("learning_objectives"));
+    const skills = stringArray(formData.get("skills"));
+    const glossary_terms = stringArray(formData.get("glossary_terms"));
+    const completion_rule = String(formData.get("completion_rule") ?? "read").trim() || "read";
 
     if (!title) return { ok: false, error: "Title is required." };
     if (!Number.isFinite(positionRaw)) return { ok: false, error: "Position must be a number." };
 
-    let content_json: ContentBlock[];
+    let content_json: unknown[];
     try {
       const parsed = JSON.parse(contentRaw);
       if (!Array.isArray(parsed) || parsed.length === 0) {
         return { ok: false, error: "content_json must be a non-empty JSON array." };
       }
-      const { validateContentBlock } = await import("./types");
-      content_json = parsed.map((b: unknown, i: number) => validateContentBlock(b, `content_json[${i}]`));
+      const { validateTrainingBlock } = await import("../training-schema");
+      content_json = parsed.map((b: unknown, i: number) => validateTrainingBlock(b, `content_json[${i}]`));
     } catch (err) {
       if (err instanceof ValidationError) throw err;
       return { ok: false, error: "content_json is not valid JSON." };
@@ -304,7 +336,7 @@ export async function createSubtopic(
 
     const { data, error } = await supabase
       .from("subtopics")
-      .insert({ topic_id: topicId, title, sequence_order: 999999, content_json })
+      .insert({ topic_id: topicId, title, sequence_order: 999999, content_json, est_minutes, learning_objectives, skills, glossary_terms, completion_rule })
       .select("id")
       .single();
 
@@ -333,24 +365,29 @@ export async function updateSubtopic(
     const title = String(formData.get("title") ?? "").trim();
     const positionRaw = Number(formData.get("sequence_order") ?? 1);
     const contentRaw = String(formData.get("content_json") ?? "[]");
+    const est_minutes = optionalPositiveInteger(formData.get("est_minutes"));
+    const learning_objectives = stringArray(formData.get("learning_objectives"));
+    const skills = stringArray(formData.get("skills"));
+    const glossary_terms = stringArray(formData.get("glossary_terms"));
+    const completion_rule = String(formData.get("completion_rule") ?? "read").trim() || "read";
 
     if (!title) return { ok: false, error: "Title is required." };
     if (!Number.isFinite(positionRaw)) return { ok: false, error: "Position must be a number." };
 
-    let content_json: ContentBlock[];
+    let content_json: unknown[];
     try {
       const parsed = JSON.parse(contentRaw);
       if (!Array.isArray(parsed) || parsed.length === 0) {
         return { ok: false, error: "content_json must be a non-empty JSON array." };
       }
-      const { validateContentBlock } = await import("./types");
-      content_json = parsed.map((b: unknown, i: number) => validateContentBlock(b, `content_json[${i}]`));
+      const { validateTrainingBlock } = await import("../training-schema");
+      content_json = parsed.map((b: unknown, i: number) => validateTrainingBlock(b, `content_json[${i}]`));
     } catch (err) {
       if (err instanceof ValidationError) throw err;
       return { ok: false, error: "content_json is not valid JSON." };
     }
 
-    const { error } = await supabase.from("subtopics").update({ title, content_json }).eq("id", subtopicId);
+    const { error } = await supabase.from("subtopics").update({ title, content_json, est_minutes, learning_objectives, skills, glossary_terms, completion_rule }).eq("id", subtopicId);
 
     if (error) return { ok: false, error: error.message };
 

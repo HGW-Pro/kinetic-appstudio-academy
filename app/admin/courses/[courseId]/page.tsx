@@ -44,6 +44,7 @@ export default async function AdminCourseDetailPage({ params }: { params: { cour
   const { data: quizzes } = subtopicIds.length
     ? await supabase.from("quizzes").select("*").in("subtopic_id", subtopicIds).returns<QuizRecord[]>()
     : { data: [] as QuizRecord[] };
+  const { data: skills } = await supabase.from("skills").select("slug,name").order("sequence_order", { ascending: true });
 
   return (
     <div className="space-y-8">
@@ -81,6 +82,7 @@ export default async function AdminCourseDetailPage({ params }: { params: { cour
           topics={topics ?? []}
           subtopics={subtopics ?? []}
           quizzes={quizzes ?? []}
+          skills={(skills ?? []) as { slug: string; name: string }[]}
         />
       </section>
     </div>

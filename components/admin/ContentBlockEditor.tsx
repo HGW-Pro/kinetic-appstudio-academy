@@ -13,6 +13,18 @@ function newVisualMockup(): ContentBlock {
 function newFlowDiagram(): ContentBlock {
   return { type: "FlowDiagram", steps: [{ label: "" }] };
 }
+const templates: Record<string, () => Record<string, unknown>> = {
+  Callout: () => ({ type: "Callout", title: "Key point", body: "", tone: "info" }),
+  ProTip: () => ({ type: "ProTip", title: "Pro tip", body: "" }),
+  Warning: () => ({ type: "Warning", title: "Watch out", body: "" }),
+  StepSequence: () => ({ type: "StepSequence", title: "Steps", steps: [{ title: "", detail: "" }] }),
+  Comparison: () => ({ type: "Comparison", title: "Compare", columns: [{ title: "Option A", items: [""] }, { title: "Option B", items: [""] }] }),
+  WhyThisMatters: () => ({ type: "WhyThisMatters", body: "", items: [""] }),
+  UsedLater: () => ({ type: "UsedLater", title: "Used later in", items: [""] }),
+  PracticeExercise: () => ({ type: "PracticeExercise", title: "Practice", objective: "", instructions: [""], hints: [""], solution: "" }),
+  "Debugging Challenge": () => ({ type: "DebuggingChallenge", title: "Debug this customization", scenario: "", question: "What is wrong?", options: ["", ""], correctIndex: 0, rootCause: "", nextStep: "" }),
+  "Simulator Challenge": () => ({ type: "SimulatorChallenge", id: "simulator-challenge-id", title: "Build a Kinetic experience", intro: "", businessRequirement: "", requiredComponents: [{ component: "TextBox", label: "Customer ID", binding: "Customer.CustID", required: true }], hints: [""], solution: "" }),
+};
 
 function moveItem<T>(arr: T[], from: number, to: number): T[] {
   if (to < 0 || to >= arr.length) return arr;
@@ -302,10 +314,11 @@ export default function ContentBlockEditor({
   value,
   onChange,
 }: {
-  value: ContentBlock[];
-  onChange: (blocks: ContentBlock[]) => void;
+  value: unknown[];
+  onChange: (blocks: unknown[]) => void;
 }) {
-  function updateBlock(i: number, block: ContentBlock) {
+  const [newType, setNewType] = useState("SlideText");
+  function updateBlock(i: number, block: unknown) {
     const blocks = [...value];
     blocks[i] = block;
     onChange(blocks);
@@ -319,11 +332,14 @@ export default function ContentBlockEditor({
 
   return (
     <div className="space-y-4">
-      {value.map((block, i) => (
+      {value.map((block, i) => {
+        const legacy = block as ContentBlock;
+        const isLegacy = legacy?.type === "SlideText" || legacy?.type === "VisualMockup" || legacy?.type === "FlowDiagram";
+        return (
         <div key={i} className="rounded-lg border border-slate-200 bg-white p-4">
           <div className="mb-3 flex items-center justify-between">
             <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-              {block.type}
+              {typeof block === "object" && block !== null && typeof (block as { type?: unknown }).type === "string" ? (block as { type: string }).type : "Unknown"}
             </span>
             <div className="flex gap-2 text-xs text-slate-400">
               <button type="button" onClick={() => move(i, -1)} disabled={i === 0} className="hover:text-slate-700 disabled:opacity-30">
@@ -342,35 +358,61 @@ export default function ContentBlockEditor({
               </button>
             </div>
           </div>
-          {block.type === "SlideText" && <SlideTextEditor block={block} onChange={(b) => updateBlock(i, b)} />}
-          {block.type === "VisualMockup" && <VisualMockupEditor block={block} onChange={(b) => updateBlock(i, b)} />}
-          {block.type === "FlowDiagram" && <FlowDiagramEditor block={block} onChange={(b) => updateBlock(i, b)} />}
+          {legacy.type === "SlideText" && <SlideTextEditor block={legacy} onChange={(b) => updateBlock(i, b)} />}
+          {legacy.type === "VisualMockup" && <VisualMockupEditor block={legacy} onChange={(b) => updateBlock(i, b)} />}
+          {legacy.type === "FlowDiagram" && <FlowDiagramEditor block={legacy} onChange={(b) => updateBlock(i, b)} />}
+          {!isLegacy && <ExperienceEditor block={block} onChange={(next) => updateBlock(i, next)} />}
         </div>
-      ))}
+        );
+      })}
 
       <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => onChange([...value, newSlideText()])}
-          className="rounded-md border border-dashed border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:border-slate-400 hover:text-slate-700"
-        >
-          + Text block
-        </button>
-        <button
-          type="button"
-          onClick={() => onChange([...value, newVisualMockup()])}
-          className="rounded-md border border-dashed border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:border-slate-400 hover:text-slate-700"
-        >
-          + Visual mockup
-        </button>
-        <button
-          type="button"
-          onClick={() => onChange([...value, newFlowDiagram()])}
-          className="rounded-md border border-dashed border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:border-slate-400 hover:text-slate-700"
-        >
-          + Flow diagram
+        <select value={newType} onChange={(event) => setNewType(event.target.value)} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600">
+          <option value="SlideText">Text block</option><option value="VisualMockup">Visual mockup</option><option value="FlowDiagram">Flow diagram</option>
+          {Object.keys(templates).map((type) => <option key={type} value={type}>{type}</option>)}
+        </select>
+        <button type="button" onClick={() => {
+          const block = newType === "SlideText" ? newSlideText() : newType === "VisualMockup" ? newVisualMockup() : newType === "FlowDiagram" ? newFlowDiagram() : templates[newType]();
+          onChange([...value, block]);
+        }} className="rounded-md border border-dashed border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-500 hover:border-slate-400 hover:text-slate-700">
+          + Add selected block
         </button>
       </div>
+    </div>
+  );
+}
+
+function ExperienceEditor({ block, onChange }: { block: unknown; onChange: (next: unknown) => void }) {
+  if (!block || typeof block !== "object") return <TemplateEditor block={block} onChange={onChange} />;
+  const value = block as Record<string, unknown>;
+  const type = typeof value.type === "string" ? value.type : "";
+  const simpleCallout = type === "Callout" || type === "ProTip" || type === "Warning";
+  if (simpleCallout) {
+    return <div className="space-y-3">
+      <input value={typeof value.title === "string" ? value.title : ""} onChange={(event) => onChange({ ...value, title: event.target.value })} placeholder="Title (optional)" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" />
+      <textarea value={typeof value.body === "string" ? value.body : ""} onChange={(event) => onChange({ ...value, body: event.target.value })} rows={3} placeholder="Message" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" />
+      {type === "Callout" && <select value={typeof value.tone === "string" ? value.tone : "info"} onChange={(event) => onChange({ ...value, tone: event.target.value })} className="rounded-md border border-slate-300 px-3 py-2 text-sm"><option value="info">Info</option><option value="success">Success</option><option value="neutral">Neutral</option></select>}
+    </div>;
+  }
+  if (type === "WhyThisMatters" || type === "UsedLater") {
+    const items = Array.isArray(value.items) ? value.items.filter((item): item is string => typeof item === "string") : [];
+    return <div className="space-y-3">
+      {type === "UsedLater" && <input value={typeof value.title === "string" ? value.title : ""} onChange={(event) => onChange({ ...value, title: event.target.value })} placeholder="Section title" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />}
+      {type === "WhyThisMatters" && <textarea value={typeof value.body === "string" ? value.body : ""} onChange={(event) => onChange({ ...value, body: event.target.value })} rows={3} placeholder="Why this matters" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />}
+      <textarea value={items.join("\n")} onChange={(event) => onChange({ ...value, items: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) })} rows={3} placeholder="One item per line" className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm" />
+    </div>;
+  }
+  return <TemplateEditor block={block} onChange={onChange} />;
+}
+
+function TemplateEditor({ block, onChange }: { block: unknown; onChange: (next: unknown) => void }) {
+  const [raw, setRaw] = useState(JSON.stringify(block, null, 2));
+  const [error, setError] = useState<string | null>(null);
+  return (
+    <div className="space-y-2">
+      <p className="text-xs leading-5 text-slate-500">This advanced learning block starts from a guided template. Edit its fields here; it will be validated when the lesson is saved.</p>
+      <textarea value={raw} onChange={(event) => { const next = event.target.value; setRaw(next); try { onChange(JSON.parse(next)); setError(null); } catch { setError("Keep this template valid JSON while editing."); } }} rows={12} spellCheck={false} className="w-full rounded-md border border-slate-300 bg-slate-900 p-3 font-mono text-xs text-slate-100 focus:border-slate-500 focus:outline-none" />
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
 }

@@ -3,6 +3,7 @@ import Link from "next/link";
 import CompletionFooter from "./CompletionFooter";
 import LessonProgress from "./LessonProgress";
 import LessonSidebar from "./LessonSidebar";
+import KineticTutor from "./KineticTutor";
 
 type Lesson = { id: string; title: string; estMinutes: number };
 
@@ -61,6 +62,7 @@ export default function LessonLayout(props: LessonLayoutProps) {
           </header>
           {error && <p role="alert" className="mt-6 rounded-lg border border-[var(--error)]/30 bg-[var(--error-soft)] px-4 py-3 text-sm text-[var(--error)]">{error}</p>}
           <div className="mt-8">{children}</div>
+          <KineticTutor className="mt-8" lessonTitle={currentLesson?.title ?? "this lesson"} topicTitle={topicTitle} />
           <CompletionFooter previousHref={previous ? `/courses/${courseSlug}/${topicSlug}/${previous.id}` : undefined} nextHref={next && isDone ? `/courses/${courseSlug}/${topicSlug}/${next.id}` : undefined} topicHref={`/courses/${courseSlug}/${topicSlug}`} isDone={isDone} isSignedIn={isSignedIn} isSaving={isSaving} onComplete={onComplete} isFinalLesson={!next} />
         </article>
       </div>

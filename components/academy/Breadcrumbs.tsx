@@ -9,6 +9,8 @@ const firstSegmentLabel: Record<string, string> = {
   courses: "Courses",
   challenges: "Challenges",
   labs: "Labs",
+  glossary: "Glossary",
+  progress: "Progress",
 };
 
 export default function Breadcrumbs() {

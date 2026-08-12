@@ -22,6 +22,9 @@ export default function SkillProgress({ items, source, compact = false }: SkillP
     <section aria-labelledby="skills-heading">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
         <h2 id="skills-heading" className="text-lg font-semibold text-[var(--text-hi)]">Your skills</h2>
+        {source === "skills" && (
+          <p className="text-xs text-[var(--text-lo)]">Based on completed tagged lessons and assessments</p>
+        )}
         {source === "course-proxy" && (
           <p className="text-xs text-[var(--text-lo)]">Course progress until skill tracking is configured</p>
         )}
@@ -43,6 +46,9 @@ export default function SkillProgress({ items, source, compact = false }: SkillP
             >
               <div className="progress-fill h-full" style={{ width: `${item.percentage}%` }} />
             </div>
+            {source === "skills" && item.taggedUnitCount === 0 && (
+              <p className="mt-1 text-xs text-[var(--text-lo)]">No curriculum lessons are tagged with this skill yet.</p>
+            )}
           </div>
         ))}
       </div>

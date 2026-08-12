@@ -43,11 +43,13 @@ export default function CourseDetailClient({
   topics,
   subtopics,
   quizzes,
+  skills,
 }: {
   courseId: string;
   topics: TopicRecord[];
   subtopics: SubtopicRecord[];
   quizzes: QuizRecord[];
+  skills: { slug: string; name: string }[];
 }) {
   const [openTopicId, setOpenTopicId] = useState<string | null>(null);
   const [openSubtopicId, setOpenSubtopicId] = useState<string | null>(null);
@@ -108,7 +110,7 @@ export default function CourseDetailClient({
                   </button>
                 </div>
 
-                <TopicForm courseId={courseId} topic={topic} />
+                <TopicForm courseId={courseId} topic={topic} topics={topics} skills={skills} />
 
                 <div className="space-y-2 pl-2">
                   <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
@@ -125,6 +127,7 @@ export default function CourseDetailClient({
                         quiz={quizBySubtopicId.get(sub.id)}
                         onDone={() => setOpenSubtopicId(null)}
                         onCancel={() => setOpenSubtopicId(null)}
+                        skills={skills}
                       />
                     ) : (
                       <SubtopicRow
@@ -143,6 +146,7 @@ export default function CourseDetailClient({
                       courseId={courseId}
                       onDone={() => setAddingSubtopicFor(null)}
                       onCancel={() => setAddingSubtopicFor(null)}
+                      skills={skills}
                     />
                   ) : (
                     <button
@@ -172,7 +176,7 @@ export default function CourseDetailClient({
               ✕ Close
             </button>
           </div>
-          <TopicForm courseId={courseId} onDone={() => setAddingTopic(false)} />
+          <TopicForm courseId={courseId} topics={topics} skills={skills} onDone={() => setAddingTopic(false)} />
         </div>
       ) : (
         <button

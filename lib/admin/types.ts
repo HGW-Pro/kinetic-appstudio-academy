@@ -63,6 +63,11 @@ export interface TopicRecord {
   sequence_order: number;
   created_at: string;
   updated_at: string;
+  difficulty?: string | null;
+  est_minutes?: number | null;
+  learning_objectives?: string[] | null;
+  skills?: string[] | null;
+  prerequisite_topic_id?: string | null;
 }
 
 export interface SubtopicRecord {
@@ -73,6 +78,11 @@ export interface SubtopicRecord {
   content_json: ContentBlock[];
   created_at: string;
   updated_at: string;
+  est_minutes?: number | null;
+  learning_objectives?: string[] | null;
+  skills?: string[] | null;
+  glossary_terms?: string[] | null;
+  completion_rule?: string | null;
 }
 
 export interface QuizRecord {

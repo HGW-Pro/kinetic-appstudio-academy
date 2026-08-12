@@ -4,6 +4,7 @@ import type { CourseRecord } from "../../../lib/admin/types";
 import CourseForm from "../../../components/admin/CourseForm";
 import BulkImportForm from "../../../components/admin/BulkImportForm";
 import MigrationButton from "../../../components/admin/MigrationButton";
+import IntelligenceSeedButtons from "../../../components/admin/IntelligenceSeedButtons";
 import DeleteButton from "../../../components/admin/DeleteButton";
 import { deleteCourseAction } from "../../../lib/admin/delete-actions";
 
@@ -91,6 +92,8 @@ export default async function AdminCoursesPage() {
           <CourseForm />
         </section>
       </div>
+
+      <IntelligenceSeedButtons />
 
       {(!courses || courses.length === 0) && (
         <section>

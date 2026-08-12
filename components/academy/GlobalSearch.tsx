@@ -4,13 +4,14 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "../../lib/supabaseClient";
 
-type SearchKind = "Course" | "Topic" | "Lesson";
+type SearchKind = "Course" | "Topic" | "Lesson" | "Glossary";
 type SearchResult = { id: string; title: string; kind: SearchKind; subtitle: string; href: string };
 type CourseRow = { id: string; title: string; slug: string };
 type TopicRow = { id: string; title: string; slug: string; course_id: string };
 type LessonRow = { id: string; title: string; topic_id: string };
+type GlossaryRow = { id: string; slug: string; term: string; simple_explanation: string | null };
 
-const GROUPS: SearchKind[] = ["Course", "Topic", "Lesson"];
+const GROUPS: SearchKind[] = ["Course", "Topic", "Lesson", "Glossary"];
 
 export default function GlobalSearch() {
   const router = useRouter();
@@ -50,15 +51,16 @@ export default function GlobalSearch() {
       setLoading(true);
       setError(null);
       const pattern = `%${trimmed}%`;
-      const [courseIndex, topicIndex, coursesResult, topicsResult, lessonsResult] = await Promise.all([
+      const [courseIndex, topicIndex, coursesResult, topicsResult, lessonsResult, glossaryResult] = await Promise.all([
         supabase.from("courses").select("id,title,slug").eq("is_published", true),
         supabase.from("topics").select("id,title,slug,course_id"),
         supabase.from("courses").select("id,title,slug").eq("is_published", true).ilike("title", pattern).limit(6),
         supabase.from("topics").select("id,title,slug,course_id").ilike("title", pattern).limit(6),
         supabase.from("subtopics").select("id,title,topic_id").ilike("title", pattern).limit(8),
+        supabase.from("glossary_terms").select("id,slug,term,simple_explanation").or(`term.ilike.${pattern},definition.ilike.${pattern},simple_explanation.ilike.${pattern}`).limit(8),
       ]);
       if (cancelled) return;
-      if (courseIndex.error || topicIndex.error || coursesResult.error || topicsResult.error || lessonsResult.error) {
+      if (courseIndex.error || topicIndex.error || coursesResult.error || topicsResult.error || lessonsResult.error || glossaryResult.error) {
         setError("Search is temporarily unavailable. Please try again.");
         setResults([]);
         setLoading(false);
@@ -78,6 +80,9 @@ export default function GlobalSearch() {
         const topic = topicById.get(lesson.topic_id);
         const course = topic ? courseById.get(topic.course_id) : undefined;
         if (topic && course) found.push({ id: lesson.id, title: lesson.title, kind: "Lesson", subtitle: `${course.title} · ${topic.title}`, href: `/courses/${course.slug}/${topic.slug}/${lesson.id}` });
+      });
+      ((glossaryResult.data ?? []) as GlossaryRow[]).forEach((term) => {
+        found.push({ id: term.id, title: term.term, kind: "Glossary", subtitle: term.simple_explanation ?? "Glossary term", href: `/glossary#${term.slug}` });
       });
       setResults(found);
       setLoading(false);
@@ -110,11 +115,11 @@ export default function GlobalSearch() {
         <div className="mx-auto mt-[10vh] w-full max-w-2xl overflow-hidden rounded-xl border border-[var(--border-strong)] bg-[var(--surface)] shadow-2xl">
           <div className="flex items-center gap-3 border-b border-[var(--border)] px-4 py-3">
             <svg aria-hidden="true" viewBox="0 0 24 24" className="h-5 w-5 shrink-0 text-[var(--text-lo)]" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4 4" strokeLinecap="round" /></svg>
-            <input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search courses, topics, and lessons" className="min-w-0 flex-1 bg-transparent text-base text-[var(--text-hi)] outline-none placeholder:text-[var(--text-lo)]" />
+            <input ref={inputRef} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search courses, lessons, and glossary" className="min-w-0 flex-1 bg-transparent text-base text-[var(--text-hi)] outline-none placeholder:text-[var(--text-lo)]" />
             <button type="button" onClick={close} className="rounded border border-[var(--border)] px-2 py-1 text-xs font-semibold text-[var(--text-mid)] hover:bg-[var(--surface-2)]">Esc</button>
           </div>
           <div className="max-h-[60vh] overflow-y-auto p-2">
-            {query.trim().length < 2 ? <p className="px-3 py-8 text-center text-sm text-[var(--text-lo)]">Type at least two characters to search the academy.</p> : loading ? <p className="px-3 py-8 text-center text-sm text-[var(--text-lo)]">Searching…</p> : error ? <p role="alert" className="m-2 rounded-md bg-[var(--error-soft)] px-3 py-3 text-sm text-[var(--error)]">{error}</p> : results.length === 0 ? <p className="px-3 py-8 text-center text-sm text-[var(--text-lo)]">No matching courses, topics, or lessons.</p> : GROUPS.map((kind) => {
+            {query.trim().length < 2 ? <p className="px-3 py-8 text-center text-sm text-[var(--text-lo)]">Type at least two characters to search the academy.</p> : loading ? <p className="px-3 py-8 text-center text-sm text-[var(--text-lo)]">Searching…</p> : error ? <p role="alert" className="m-2 rounded-md bg-[var(--error-soft)] px-3 py-3 text-sm text-[var(--error)]">{error}</p> : results.length === 0 ? <p className="px-3 py-8 text-center text-sm text-[var(--text-lo)]">No matching courses, topics, lessons, or glossary terms.</p> : GROUPS.map((kind) => {
               const group = results.filter((result) => result.kind === kind);
               if (!group.length) return null;
               return <section key={kind} className="py-2" aria-label={`${kind} results`}><h2 className="px-3 pb-1 text-xs font-semibold uppercase tracking-[0.13em] text-[var(--text-lo)]">{kind}s</h2>{group.map((result) => <button key={`${result.kind}-${result.id}`} type="button" onClick={() => navigate(result)} className="flex w-full items-center gap-3 rounded-md px-3 py-3 text-left hover:bg-[var(--surface-2)]"><span className="flex h-7 w-7 items-center justify-center rounded-md bg-[var(--primary)]/[0.08] text-xs font-bold text-[var(--primary)]">{result.kind.slice(0, 1)}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-[var(--text-hi)]">{result.title}</span><span className="block truncate text-xs text-[var(--text-lo)]">{result.subtitle}</span></span><span aria-hidden="true" className="text-[var(--text-lo)]">→</span></button>)}</section>;

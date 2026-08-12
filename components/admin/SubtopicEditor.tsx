@@ -13,6 +13,7 @@ import { normalizeContentBlocks } from "../../lib/admin/types";
 import ContentBlockEditor from "./ContentBlockEditor";
 import QuizQuestionEditor from "./QuizQuestionEditor";
 import { useToast } from "./ToastProvider";
+import { SkillPicker } from "./TopicForm";
 
 const DEFAULT_CONTENT: ContentBlock[] = [{ type: "SlideText", body: [{ type: "paragraph", text: "" }] }];
 const DEFAULT_QUIZ: QuizQuestionSchema[] = [];
@@ -24,6 +25,7 @@ export default function SubtopicEditor({
   quiz,
   onDone,
   onCancel,
+  skills = [],
 }: {
   topicId: string;
   courseId: string;
@@ -31,10 +33,11 @@ export default function SubtopicEditor({
   quiz?: QuizRecord;
   onDone?: () => void;
   onCancel?: () => void;
+  skills?: { slug: string; name: string }[];
 }) {
   const [title, setTitle] = useState(subtopic?.title ?? "");
   const [sequenceOrder, setSequenceOrder] = useState((subtopic?.sequence_order ?? 0) + 1);
-  const [blocks, setBlocks] = useState<ContentBlock[]>(
+  const [blocks, setBlocks] = useState<unknown[]>(
     subtopic ? normalizeContentBlocks(subtopic.content_json) : DEFAULT_CONTENT
   );
   const [questions, setQuestions] = useState<QuizQuestionSchema[]>(quiz?.questions_json ?? DEFAULT_QUIZ);
@@ -64,6 +67,11 @@ export default function SubtopicEditor({
     formData.set("title", title);
     formData.set("sequence_order", String(sequenceOrder));
     formData.set("content_json", JSON.stringify(blocks));
+    formData.set("est_minutes", String((e.currentTarget.elements.namedItem("est_minutes") as HTMLInputElement)?.value ?? ""));
+    formData.set("learning_objectives", String((e.currentTarget.elements.namedItem("learning_objectives") as HTMLTextAreaElement)?.value ?? ""));
+    formData.set("skills", String((e.currentTarget.elements.namedItem("skills") as HTMLInputElement)?.value ?? "[]"));
+    formData.set("completion_rule", String((e.currentTarget.elements.namedItem("completion_rule") as HTMLSelectElement)?.value ?? "read"));
+    formData.set("glossary_terms", String((e.currentTarget.elements.namedItem("glossary_terms") as HTMLTextAreaElement)?.value ?? ""));
 
     const result = isEdit
       ? await updateSubtopic(subtopic!.id, topicId, courseId, formData)
@@ -174,6 +182,30 @@ export default function SubtopicEditor({
         <p className="text-[11px] text-slate-400">
           1 = first. Setting this shifts every other subtopic in this topic to make room.
         </p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Estimated minutes</label>
+            <input type="number" min={1} name="est_minutes" defaultValue={subtopic?.est_minutes ?? ""} placeholder="e.g. 10" className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Completion requirement</label>
+            <select name="completion_rule" defaultValue={subtopic?.completion_rule ?? "read"} className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none">
+              <option value="read">Read lesson</option><option value="quiz">Pass knowledge check</option><option value="practice">Complete practice</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Learning objectives</label>
+          <textarea name="learning_objectives" defaultValue={(subtopic?.learning_objectives ?? []).join("\n")} rows={2} placeholder="One objective per line" className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Skills</label>
+          <SkillPicker skills={skills} selected={subtopic?.skills ?? []} />
+        </div>
+        <div>
+          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Related glossary terms</label>
+          <textarea name="glossary_terms" defaultValue={(subtopic?.glossary_terms ?? []).join("\n")} rows={2} placeholder="One glossary slug per line, e.g. dataview" className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none" />
+        </div>
 
         <div>
           <div className="mb-2 flex items-center justify-between">

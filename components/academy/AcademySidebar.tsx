@@ -13,8 +13,8 @@ const navigation: { label: string; href?: string; icon: IconName; comingSoon?: b
   { label: "Courses", href: "/courses", icon: "courses" },
   { label: "Challenges", href: "/challenges", icon: "challenge" },
   { label: "Labs", href: "/labs", icon: "labs" },
-  { label: "Glossary", icon: "glossary", comingSoon: true },
-  { label: "Progress", href: "/dashboard", icon: "progress" },
+  { label: "Glossary", href: "/glossary", icon: "glossary" },
+  { label: "Progress", href: "/progress", icon: "progress" },
 ];
 
 function Icon({ name }: { name: IconName }) {

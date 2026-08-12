@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "./AuthProvider";
-import { getEmployeeSkillProgress } from "../lib/cms/skill-progress";
+import { getComputedSkillProgress } from "../lib/cms/skill-progress";
 import { cmsModuleSlug } from "../lib/cms/shared";
 import { loadLocalProgress, loadRemoteProgress, type ProgressState } from "../lib/progress";
 import LearningPath from "./academy/LearningPath";
@@ -27,10 +27,8 @@ export default function CmsDashboardClient({ courses }: DashboardProps) {
 
     async function loadDashboard() {
       setLoading(true);
-      const [nextProgress, skills] = await Promise.all([
-        user ? loadRemoteProgress(user.id) : Promise.resolve(loadLocalProgress()),
-        getEmployeeSkillProgress(user?.id),
-      ]);
+      const nextProgress = user ? await loadRemoteProgress(user.id) : loadLocalProgress();
+      const skills = await getComputedSkillProgress(nextProgress);
       if (!cancelled) {
         setProgress(nextProgress);
         setSkillProgress(skills);
@@ -46,11 +44,7 @@ export default function CmsDashboardClient({ courses }: DashboardProps) {
 
   const path = useMemo(() => getLearningPathProgress(courses, progress), [courses, progress]);
   const current = useMemo(() => getCurrentLearning(courses, progress), [courses, progress]);
-  const courseProxySkills = useMemo(
-    () => path.map((item) => ({ id: item.course.id, name: item.course.title, percentage: item.completion })),
-    [path]
-  );
-  const skillsSource = skillProgress?.length ? "skills" : courseProxySkills.length ? "course-proxy" : "empty";
+  const skillsSource = skillProgress?.length ? "skills" : "empty";
 
   const totals = useMemo(() => {
     const totalLessons = path.reduce((sum, item) => sum + item.totalLessons, 0);
@@ -151,7 +145,7 @@ export default function CmsDashboardClient({ courses }: DashboardProps) {
       </section>
 
       <div className="grid gap-x-12 gap-y-10 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.75fr)]">
-        <SkillProgress items={skillProgress?.length ? skillProgress : courseProxySkills} source={skillsSource} />
+        <SkillProgress items={skillProgress ?? []} source={skillsSource} />
 
         <section aria-labelledby="challenge-heading" className="border-l-2 border-[var(--accent)] px-5 py-1">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">Practice</p>

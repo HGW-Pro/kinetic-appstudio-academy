@@ -8,11 +8,18 @@ import { cmsModuleSlug } from "../../lib/cms/shared";
 import { loadLocalProgress, loadRemoteProgress, markLessonComplete } from "../../lib/progress";
 import CmsContentRenderer from "./CmsContentRenderer";
 import LessonLayout from "../learning/LessonLayout";
+import UsedLaterLinks, { type UsedLaterTopic } from "../learning/UsedLaterLinks";
 
-type Lesson = { id: string; title: string; sequence_order: number; est_minutes: number | null; content_json: unknown };
+type Lesson = { id: string; title: string; sequence_order: number; est_minutes: number | null; content_json: unknown; skills: unknown };
 type Course = { id: string; title: string; slug: string };
-type Topic = { id: string; title: string; slug: string; est_minutes: number | null; prerequisite_topic_id: string | null };
-type TopicReference = { id: string; title: string };
+type Topic = { id: string; title: string; slug: string; sequence_order: number; est_minutes: number | null; prerequisite_topic_id: string | null; skills: unknown };
+type TopicReference = { id: string; title: string; slug: string; sequence_order: number; skills: unknown };
+
+function tags(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((tag): tag is string => typeof tag === "string" && tag.trim().length > 0).map((tag) => tag.trim())
+    : [];
+}
 
 export default function CmsSubtopicReader({ courseSlug, topicSlug, subtopicId }: { courseSlug: string; topicSlug: string; subtopicId: string }) {
   const { user, loading: authLoading } = useAuth();
@@ -27,6 +34,7 @@ export default function CmsSubtopicReader({ courseSlug, topicSlug, subtopicId }:
   const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [usedLater, setUsedLater] = useState<UsedLaterTopic[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -45,7 +53,7 @@ export default function CmsSubtopicReader({ courseSlug, topicSlug, subtopicId }:
       }
       const { data: loadedTopics } = await supabase
         .from("topics")
-        .select("id,title,slug,est_minutes,prerequisite_topic_id")
+        .select("id,title,slug,sequence_order,est_minutes,prerequisite_topic_id,skills")
         .eq("course_id", loadedCourse.id)
         .order("sequence_order");
       if (cancelled) return;
@@ -56,17 +64,34 @@ export default function CmsSubtopicReader({ courseSlug, topicSlug, subtopicId }:
       }
       const { data: loadedLessons, error: lessonError } = await supabase
         .from("subtopics")
-        .select("id,title,sequence_order,est_minutes,content_json")
+        .select("id,title,sequence_order,est_minutes,content_json,skills")
         .eq("topic_id", loadedTopic.id)
         .order("sequence_order");
       if (cancelled) return;
       const allLessons = (loadedLessons ?? []) as Lesson[];
+      const { data: curriculumLessonTags } = await supabase
+        .from("subtopics")
+        .select("topic_id,skills")
+        .in("topic_id", (loadedTopics ?? []).map((item) => item.id));
+      if (cancelled) return;
       setCourse(loadedCourse);
       setTopic(loadedTopic);
       setTopics((loadedTopics ?? []) as TopicReference[]);
       setLessons(allLessons);
       setLesson(allLessons.find((item) => item.id === subtopicId) ?? null);
       setModuleSlug(cmsModuleSlug(loadedCourse.slug, loadedTopic.slug));
+      const lessonTags = new Set([...tags(loadedTopic.skills), ...tags(allLessons.find((item) => item.id === subtopicId)?.skills)]);
+      const skillsByTopic = new Map<string, string[]>();
+      for (const item of curriculumLessonTags ?? []) {
+        const previous = skillsByTopic.get(item.topic_id) ?? [];
+        skillsByTopic.set(item.topic_id, [...previous, ...tags(item.skills)]);
+      }
+      const related = ((loadedTopics ?? []) as Topic[])
+        .filter((candidate) => candidate.sequence_order > loadedTopic.sequence_order)
+        .filter((candidate) => [...tags(candidate.skills), ...(skillsByTopic.get(candidate.id) ?? [])].some((tag) => lessonTags.has(tag)))
+        .slice(0, 4)
+        .map((candidate) => ({ title: candidate.title, href: `/courses/${loadedCourse.slug}/${candidate.slug}` }));
+      setUsedLater(related);
       if (lessonError) setError("Lesson content could not be loaded.");
       setReady(true);
     })();
@@ -141,6 +166,7 @@ export default function CmsSubtopicReader({ courseSlug, topicSlug, subtopicId }:
       error={error}
     >
       <CmsContentRenderer blocks={Array.isArray(lesson.content_json) ? lesson.content_json : []} quizContext={{ moduleSlug, moduleTitle: topic.title }} />
+      <UsedLaterLinks topics={usedLater} />
     </LessonLayout>
   );
 }
