@@ -9,6 +9,7 @@ import {
   upsertQuiz,
 } from "../../lib/admin/actions";
 import type { SubtopicRecord, QuizRecord, ContentBlock, QuizQuestionSchema } from "../../lib/admin/types";
+import { normalizeContentBlocks } from "../../lib/admin/types";
 import ContentBlockEditor from "./ContentBlockEditor";
 import QuizQuestionEditor from "./QuizQuestionEditor";
 import { useToast } from "./ToastProvider";
@@ -31,7 +32,13 @@ export default function SubtopicEditor({
 }) {
   const [title, setTitle] = useState(subtopic?.title ?? "");
   const [sequenceOrder, setSequenceOrder] = useState(subtopic?.sequence_order ?? 0);
-  const [blocks, setBlocks] = useState<ContentBlock[]>(subtopic?.content_json ?? DEFAULT_CONTENT);
+  // Normalize on load: subtopics migrated/imported before the body schema
+  // was ordered SlideNode[] may still have plain string[] bodies (or a
+  // legacy sibling `images[]`) sitting in the database. Without this,
+  // those subtopics render as completely empty in the editor.
+  const [blocks, setBlocks] = useState<ContentBlock[]>(
+    subtopic ? normalizeContentBlocks(subtopic.content_json) : DEFAULT_CONTENT
+  );
   const [questions, setQuestions] = useState<QuizQuestionSchema[]>(quiz?.questions_json ?? DEFAULT_QUIZ);
   const [showRawJson, setShowRawJson] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -70,7 +77,12 @@ export default function SubtopicEditor({
       setFormError(result.error ?? null);
       return;
     }
-    show(isEdit ? "Subtopic updated." : "Subtopic created.", "success");
+    show(
+      isEdit
+        ? "Subtopic updated. This also fixes the display permanently if it was showing empty before."
+        : "Subtopic created.",
+      "success"
+    );
     router.refresh();
     onDone?.();
   }

@@ -41,8 +41,8 @@ export type ContentBlock = SlideTextBlock | VisualMockupBlock | FlowDiagramBlock
 
 export interface QuizQuestionSchema {
   question: string;
-  options: string[]; // 2-6 options
-  correctIndex: number; // index into options
+  options: string[];
+  correctIndex: number;
   explanation: string;
 }
 
@@ -375,10 +375,6 @@ export function shuffleBulkImportPayload(payload: BulkImportPayload): BulkImport
 }
 
 // ---------- Multi-course bulk import ----------
-// AI-generated JSON can describe several full courses in one paste. Each
-// course still imports independently server-side (see
-// admin_bulk_import_courses SQL function) so one malformed course doesn't
-// block the rest.
 
 export interface MultiCourseBulkImportPayload {
   courses: BulkImportPayload[];
@@ -401,8 +397,6 @@ export function validateMultiCourseBulkImportPayload(raw: unknown): MultiCourseB
   }
   const r = raw as Record<string, unknown>;
 
-  // Backward compatible: a single { course, topics } object (no wrapping
-  // "courses" array) is treated as a one-item batch.
   if (r.course !== undefined && r.courses === undefined) {
     return { courses: [validateBulkImportPayload(raw)] };
   }
@@ -414,12 +408,6 @@ export function validateMultiCourseBulkImportPayload(raw: unknown): MultiCourseB
   return { courses: coursesRaw.map((c, i) => validateBulkImportPayloadPrefixed(c, `courses[${i}]`)) };
 }
 
-// Resolves an image reference that may be either:
-//   - a full URL (http/https) -> returned unchanged
-//   - a bare filename or storage path (e.g. "LoginScreen.png" or
-//     "uploads/LoginScreen.png") -> prefixed with the course-assets public
-//     storage URL, so AI-generated JSON can reference images by filename
-//     without needing to know the Supabase project ref.
 export function resolveImageSrc(src: string, supabaseUrl: string): string {
   if (/^https?:\/\//i.test(src)) return src;
   const base = supabaseUrl.replace(/\/+$/, "");
@@ -457,4 +445,107 @@ export function resolveImagesInMultiPayload(
   supabaseUrl: string
 ): MultiCourseBulkImportPayload {
   return { courses: payload.courses.map((c) => resolveImagesInPayload(c, supabaseUrl)) };
+}
+
+// ---------- Backward-compatible normalization ----------
+// Subtopics migrated before the SlideText.body schema changed from a flat
+// string[] to an ordered SlideNode[] still have old-shape data sitting in
+// the database (content_json body items are plain strings, not
+// {type:"paragraph"|"image"} objects). Without this, the admin editor's
+// SlideTextEditor sees `node.type` as undefined on every item, fails to
+// match "paragraph", falls through to rendering it as a broken image block
+// with empty fields — which is exactly why previously-migrated subtopics
+// appeared completely empty in the editor. This normalizes on load so old
+// records display correctly; saving through the editor afterward persists
+// them in the current correct shape, self-healing the record permanently.
+export function normalizeContentBlocks(blocks: unknown): ContentBlock[] {
+  if (!Array.isArray(blocks)) return [];
+  return blocks.map((block): ContentBlock => {
+    if (typeof block !== "object" || block === null) {
+      return { type: "SlideText", body: [{ type: "paragraph", text: "" }] };
+    }
+    const b = block as Record<string, unknown>;
+
+    if (b.type === "SlideText") {
+      const rawBody = Array.isArray(b.body) ? b.body : [];
+      const body: SlideNode[] = rawBody.map((item): SlideNode => {
+        if (typeof item === "string") {
+          return { type: "paragraph", text: item };
+        }
+        if (typeof item === "object" && item !== null) {
+          const n = item as Record<string, unknown>;
+          if (n.type === "image" && typeof n.src === "string") {
+            return {
+              type: "image",
+              src: n.src,
+              alt: typeof n.alt === "string" ? n.alt : "",
+              caption: typeof n.caption === "string" ? n.caption : undefined,
+            };
+          }
+          if (typeof n.text === "string") {
+            return { type: "paragraph", text: n.text };
+          }
+        }
+        return { type: "paragraph", text: "" };
+      });
+      const legacyImages = Array.isArray((b as any).images) ? (b as any).images : [];
+      for (const img of legacyImages) {
+        if (typeof img === "object" && img !== null) {
+          const im = img as Record<string, unknown>;
+          const src = im.src ?? im.url ?? im.imageUrl;
+          if (typeof src === "string" && src.trim()) {
+            body.push({
+              type: "image",
+              src,
+              alt: typeof im.alt === "string" ? im.alt : "Image",
+              caption: typeof im.caption === "string" ? im.caption : undefined,
+            });
+          }
+        }
+      }
+      if (body.length === 0) body.push({ type: "paragraph", text: "" });
+      return {
+        type: "SlideText",
+        heading: typeof b.heading === "string" ? b.heading : undefined,
+        body,
+        proTip: typeof b.proTip === "string" ? b.proTip : undefined,
+      };
+    }
+
+    if (b.type === "VisualMockup") {
+      return {
+        type: "VisualMockup",
+        mockupType: (["browser", "form", "menu", "dialog"].includes(b.mockupType as string)
+          ? b.mockupType
+          : "form") as VisualMockupBlock["mockupType"],
+        title: typeof b.title === "string" ? b.title : "",
+        elements: Array.isArray(b.elements)
+          ? (b.elements as unknown[]).map((el) => {
+              const e = (typeof el === "object" && el !== null ? el : {}) as Record<string, unknown>;
+              return {
+                label: typeof e.label === "string" ? e.label : "",
+                kind: (["input", "button", "text", "panel"].includes(e.kind as string) ? e.kind : "input") as any,
+              };
+            })
+          : [],
+      };
+    }
+
+    if (b.type === "FlowDiagram") {
+      return {
+        type: "FlowDiagram",
+        steps: Array.isArray(b.steps)
+          ? (b.steps as unknown[]).map((s) => {
+              const st = (typeof s === "object" && s !== null ? s : {}) as Record<string, unknown>;
+              return {
+                label: typeof st.label === "string" ? st.label : "",
+                description: typeof st.description === "string" ? st.description : undefined,
+              };
+            })
+          : [],
+      };
+    }
+
+    return { type: "SlideText", body: [{ type: "paragraph", text: "" }] };
+  });
 }
