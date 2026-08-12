@@ -9,9 +9,10 @@ type CompletionFooterProps = {
   isSaving: boolean;
   onComplete: () => void;
   isFinalLesson: boolean;
+  assessmentHref?: string;
 };
 
-export default function CompletionFooter({ previousHref, nextHref, topicHref, isDone, isSignedIn, isSaving, onComplete, isFinalLesson }: CompletionFooterProps) {
+export default function CompletionFooter({ previousHref, nextHref, topicHref, isDone, isSignedIn, isSaving, onComplete, isFinalLesson, assessmentHref }: CompletionFooterProps) {
   return (
     <footer className="mt-10 border-t border-[var(--border)] pt-6">
       <p className={`mb-4 text-sm font-semibold ${isDone ? "text-[var(--success)]" : "text-[var(--text-mid)]"}`}>
@@ -28,12 +29,12 @@ export default function CompletionFooter({ previousHref, nextHref, topicHref, is
             Next lesson →
           </Link>
         ) : isDone && isFinalLesson ? (
-          <Link href={topicHref} className="inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[var(--primary-dark)]">
-            Back to topic →
+          <Link href={assessmentHref ?? topicHref} className="inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[var(--primary-dark)]">
+            {assessmentHref ? "Take the assessment →" : "Back to topic →"}
           </Link>
         ) : isSignedIn ? (
           <button type="button" onClick={onComplete} disabled={isSaving} className="inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[var(--primary-dark)] disabled:cursor-wait disabled:opacity-70">
-            {isSaving ? "Saving progress…" : isFinalLesson ? "Complete topic →" : "Complete & continue →"}
+            {isSaving ? "Saving progress…" : isFinalLesson ? (assessmentHref ? "Complete & take assessment →" : "Complete topic →") : "Complete & continue →"}
           </button>
         ) : (
           <Link href="/login" className="inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[var(--primary-dark)]">

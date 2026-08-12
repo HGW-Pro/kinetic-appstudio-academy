@@ -20,12 +20,13 @@ type LessonLayoutProps = {
   isSignedIn: boolean;
   isSaving: boolean;
   onComplete: () => void;
+  assessmentHref?: string;
   error?: string | null;
   children: ReactNode;
 };
 
 export default function LessonLayout(props: LessonLayoutProps) {
-  const { courseTitle, courseSlug, topicTitle, topicSlug, topicEstMinutes, prerequisiteName, lessons, currentLessonId, completedIds, isSignedIn, isSaving, onComplete, error, children } = props;
+  const { courseTitle, courseSlug, topicTitle, topicSlug, topicEstMinutes, prerequisiteName, lessons, currentLessonId, completedIds, isSignedIn, isSaving, onComplete, assessmentHref, error, children } = props;
   const currentIndex = lessons.findIndex((lesson) => lesson.id === currentLessonId);
   const currentLesson = lessons[currentIndex];
   const previous = currentIndex > 0 ? lessons[currentIndex - 1] : undefined;
@@ -63,7 +64,7 @@ export default function LessonLayout(props: LessonLayoutProps) {
           {error && <p role="alert" className="mt-6 rounded-lg border border-[var(--error)]/30 bg-[var(--error-soft)] px-4 py-3 text-sm text-[var(--error)]">{error}</p>}
           <div className="mt-8">{children}</div>
           <KineticTutor className="mt-8" lessonTitle={currentLesson?.title ?? "this lesson"} topicTitle={topicTitle} />
-          <CompletionFooter previousHref={previous ? `/courses/${courseSlug}/${topicSlug}/${previous.id}` : undefined} nextHref={next && isDone ? `/courses/${courseSlug}/${topicSlug}/${next.id}` : undefined} topicHref={`/courses/${courseSlug}/${topicSlug}`} isDone={isDone} isSignedIn={isSignedIn} isSaving={isSaving} onComplete={onComplete} isFinalLesson={!next} />
+          <CompletionFooter previousHref={previous ? `/courses/${courseSlug}/${topicSlug}/${previous.id}` : undefined} nextHref={next && isDone ? `/courses/${courseSlug}/${topicSlug}/${next.id}` : undefined} topicHref={`/courses/${courseSlug}/${topicSlug}`} isDone={isDone} isSignedIn={isSignedIn} isSaving={isSaving} onComplete={onComplete} isFinalLesson={!next} assessmentHref={assessmentHref} />
         </article>
       </div>
     </div>

@@ -35,6 +35,7 @@ export default function CmsSubtopicReader({ courseSlug, topicSlug, subtopicId }:
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [usedLater, setUsedLater] = useState<UsedLaterTopic[]>([]);
+  const [hasAssessment, setHasAssessment] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +93,15 @@ export default function CmsSubtopicReader({ courseSlug, topicSlug, subtopicId }:
         .slice(0, 4)
         .map((candidate) => ({ title: candidate.title, href: `/courses/${loadedCourse.slug}/${candidate.slug}` }));
       setUsedLater(related);
+      if (allLessons.length > 0) {
+        const { data: quizRows } = await supabase
+          .from("quizzes")
+          .select("id")
+          .in("subtopic_id", allLessons.map((item) => item.id))
+          .limit(1);
+        if (cancelled) return;
+        setHasAssessment((quizRows ?? []).length > 0);
+      }
       if (lessonError) setError("Lesson content could not be loaded.");
       setReady(true);
     })();
@@ -135,7 +145,15 @@ export default function CmsSubtopicReader({ courseSlug, topicSlug, subtopicId }:
     }
     setSaving(false);
     const next = lessons[index + 1];
-    router.push(next ? `/courses/${courseSlug}/${topicSlug}/${next.id}` : `/courses/${courseSlug}/${topicSlug}`);
+    // After the final lesson, continue straight into the topic assessment
+    // when one exists instead of dropping back onto the topic overview.
+    router.push(
+      next
+        ? `/courses/${courseSlug}/${topicSlug}/${next.id}`
+        : hasAssessment
+          ? `/courses/${courseSlug}/${topicSlug}/quiz`
+          : `/courses/${courseSlug}/${topicSlug}`
+    );
   }
 
   if (locked) {
@@ -163,6 +181,7 @@ export default function CmsSubtopicReader({ courseSlug, topicSlug, subtopicId }:
       isSignedIn={Boolean(user)}
       isSaving={saving}
       onComplete={complete}
+      assessmentHref={hasAssessment ? `/courses/${courseSlug}/${topicSlug}/quiz` : undefined}
       error={error}
     >
       <CmsContentRenderer blocks={Array.isArray(lesson.content_json) ? lesson.content_json : []} quizContext={{ moduleSlug, moduleTitle: topic.title }} />

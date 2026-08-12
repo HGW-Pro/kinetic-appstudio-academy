@@ -43,6 +43,7 @@ export default function CmsTopicAccordion({ courseSlug, topicSlug }: { courseSlu
   const [subtopics, setSubtopics] = useState<Subtopic[]>([]);
   const [progress, setProgress] = useState<ProgressState>({});
   const [enrolled, setEnrolled] = useState(false);
+  const [quizQuestionCount, setQuizQuestionCount] = useState(0);
   const [ready, setReady] = useState(false);
   const [continuing, setContinuing] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
@@ -91,6 +92,17 @@ export default function CmsTopicAccordion({ courseSlug, topicSlug }: { courseSlu
       if (cancelled) return;
       if (subtopicError) setDataError("Lessons could not be loaded.");
       setSubtopics((loadedSubtopics ?? []) as Subtopic[]);
+      const subtopicIds = (loadedSubtopics ?? []).map((item) => item.id);
+      if (subtopicIds.length > 0) {
+        const { data: quizRows } = await supabase
+          .from("quizzes")
+          .select("questions_json")
+          .in("subtopic_id", subtopicIds);
+        if (cancelled) return;
+        setQuizQuestionCount((quizRows ?? []).reduce((sum, row) => sum + (Array.isArray(row.questions_json) ? row.questions_json.length : 0), 0));
+      } else {
+        setQuizQuestionCount(0);
+      }
       setReady(true);
     })();
     return () => { cancelled = true; };
@@ -113,7 +125,12 @@ export default function CmsTopicAccordion({ courseSlug, topicSlug }: { courseSlu
     () => subtopics.map((subtopic) => ({ id: subtopic.id, title: subtopic.title, estMinutes: subtopic.est_minutes && subtopic.est_minutes > 0 ? subtopic.est_minutes : 5 })),
     [subtopics]
   );
-  const firstIncomplete = orderedLessons.find((lesson) => !completedIds.includes(lesson.id)) ?? orderedLessons[orderedLessons.length - 1];
+  const firstIncomplete = orderedLessons.find((lesson) => !completedIds.includes(lesson.id)) ?? null;
+  const allLessonsDone = orderedLessons.length > 0 && !firstIncomplete;
+  const certified = Boolean(progress[moduleSlug]?.completedAt);
+  const topicIndex = topic ? topics.findIndex((item) => item.id === topic.id) : -1;
+  const nextTopic = topicIndex >= 0 ? topics[topicIndex + 1] ?? null : null;
+  const hasAssessment = quizQuestionCount > 0;
   const prerequisiteName = topic?.prerequisite_topic_id ? topics.find((item) => item.id === topic.prerequisite_topic_id)?.title ?? "Required topic" : null;
   const objectives = Array.isArray(topic?.learning_objectives)
     ? topic.learning_objectives.filter((objective): objective is string => typeof objective === "string" && objective.trim().length > 0)
@@ -123,7 +140,7 @@ export default function CmsTopicAccordion({ courseSlug, topicSlug }: { courseSlu
   const relatedLabs = course && topic ? getLabsForTopic(course.slug, topic.slug) : [];
 
   async function handleContinue() {
-    if (!user || !firstIncomplete || !topic) return;
+    if (!user || !topic) return;
     setContinuing(true);
     setActionError(null);
     if (!enrolled) {
@@ -135,8 +152,26 @@ export default function CmsTopicAccordion({ courseSlug, topicSlug }: { courseSlu
       }
       setEnrolled(true);
     }
-    router.push(`/courses/${courseSlug}/${topicSlug}/${firstIncomplete.id}`);
+    // Route to the learner's true next step instead of falling back to the
+    // last lesson: next incomplete lesson → topic assessment → next topic.
+    if (firstIncomplete) {
+      router.push(`/courses/${courseSlug}/${topicSlug}/${firstIncomplete.id}`);
+      return;
+    }
+    if (hasAssessment && !certified) {
+      router.push(`/courses/${courseSlug}/${topicSlug}/quiz`);
+      return;
+    }
+    router.push(nextTopic ? `/courses/${courseSlug}/${nextTopic.slug}` : "/learning-path");
   }
+
+  const continueLabel = firstIncomplete
+    ? "Continue Learning →"
+    : allLessonsDone && hasAssessment && !certified
+      ? "Take the assessment →"
+      : nextTopic
+        ? "Next topic →"
+        : "Review learning path →";
 
   if (!ready || authLoading) return <div className="py-16 text-center text-sm text-[var(--text-lo)]">Loading topic…</div>;
   if (dataError || !course || !topic) return <div role="alert" className="rounded-xl border border-[var(--error)]/30 bg-[var(--error-soft)] p-5 text-[var(--error)]">{dataError ?? "Topic unavailable."}</div>;
@@ -165,6 +200,8 @@ export default function CmsTopicAccordion({ courseSlug, topicSlug }: { courseSlu
         isCertified={Boolean(progress[moduleSlug]?.completedAt)}
         onContinue={handleContinue}
         isContinuing={continuing}
+        continueLabel={continueLabel}
+        assessment={hasAssessment ? { questionCount: quizQuestionCount, unlocked: allLessonsDone, passed: certified, href: `/courses/${courseSlug}/${topicSlug}/quiz` } : null}
         practicalMilestone={relatedLabs.length > 0 ? <div className="space-y-3"><div><p className="text-xs font-semibold uppercase tracking-[0.13em] text-[var(--primary)]">Practical milestone</p><h2 className="mt-1 text-lg font-semibold text-[var(--text-hi)]">Put this topic into practice</h2><p className="mt-1 text-sm text-[var(--text-mid)]">Build a working Kinetic customization after completing the guided lessons.</p></div><div className="flex flex-wrap gap-3">{relatedLabs.map((lab) => <Link key={lab.slug} href={`/labs/${lab.slug}`} className="inline-flex min-h-10 items-center rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--primary-dark)]">🧪 {lab.title} →</Link>)}</div></div> : undefined}
         challenge={challengeLesson ? <><p className="text-xs font-semibold uppercase tracking-[0.13em] text-[var(--accent)]">Practical challenge</p><h2 className="mt-1 text-lg font-semibold text-[var(--text-hi)]">{challengeLesson.title}</h2><p className="mt-1 text-sm text-[var(--text-mid)]">Apply this topic&apos;s concepts in a hands-on challenge.</p></> : undefined}
       />

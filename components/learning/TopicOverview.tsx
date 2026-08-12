@@ -5,6 +5,8 @@ import LessonProgress from "./LessonProgress";
 
 type TopicLesson = { id: string; title: string; estMinutes: number };
 
+type TopicAssessment = { questionCount: number; unlocked: boolean; passed: boolean; href: string };
+
 type TopicOverviewProps = {
   courseSlug: string;
   courseTitle: string;
@@ -22,15 +24,17 @@ type TopicOverviewProps = {
   isCertified: boolean;
   onContinue: () => void;
   isContinuing: boolean;
+  continueLabel?: string;
+  assessment?: TopicAssessment | null;
   challenge?: ReactNode;
   practicalMilestone?: ReactNode;
 };
 
 export default function TopicOverview(props: TopicOverviewProps) {
-  const { courseSlug, courseTitle, topicSlug, title, description, difficulty, estMinutes, prerequisiteName, objectives, lessons, completedIds, isSignedIn, isEnrolled, isCertified, onContinue, isContinuing, challenge, practicalMilestone } = props;
+  const { courseSlug, courseTitle, topicSlug, title, description, difficulty, estMinutes, prerequisiteName, objectives, lessons, completedIds, isSignedIn, isEnrolled, isCertified, onContinue, isContinuing, continueLabel, assessment, challenge, practicalMilestone } = props;
   const completedCount = lessons.filter((lesson) => completedIds.includes(lesson.id)).length;
   const progress = lessons.length ? Math.round((completedCount / lessons.length) * 100) : 0;
-  const firstAvailable = lessons.find((lesson) => !completedIds.includes(lesson.id)) ?? lessons[lessons.length - 1];
+  const hasNextStep = lessons.length > 0 || Boolean(assessment);
   const canOpen = (index: number) => isSignedIn && isEnrolled && index <= Math.min(completedIds.length, lessons.length - 1);
 
   return (
@@ -70,12 +74,34 @@ export default function TopicOverview(props: TopicOverviewProps) {
         </ol>
       </section>
 
+      {assessment && assessment.questionCount > 0 && (
+        <section aria-label="Topic assessment" className="border border-[var(--border)] bg-[var(--surface)] px-5 py-5 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-start gap-4">
+              <span aria-hidden="true" className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-base ${assessment.passed ? "bg-[var(--success-soft)] text-[var(--success)]" : assessment.unlocked ? "bg-[var(--primary)]/[0.1] text-[var(--primary)]" : "bg-[var(--surface-2)] text-[var(--text-lo)]"}`}>{assessment.passed ? "✓" : assessment.unlocked ? "📝" : "🔒"}</span>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.13em] text-[var(--primary)]">Topic assessment</p>
+                <h2 className="mt-1 text-lg font-semibold text-[var(--text-hi)]">{assessment.passed ? "Assessment passed" : "Check your knowledge"}</h2>
+                <p className="mt-1 text-sm text-[var(--text-mid)]">{assessment.questionCount} questions · Instant feedback · 80% required to pass</p>
+              </div>
+            </div>
+            {isSignedIn && assessment.unlocked ? (
+              <Link href={assessment.href} className="inline-flex min-h-10 items-center justify-center rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[var(--primary-dark)]">
+                {assessment.passed ? "Retake assessment →" : "Take the assessment →"}
+              </Link>
+            ) : (
+              <span className="text-sm text-[var(--text-lo)]">{isSignedIn ? "Complete all lessons to unlock" : "Sign in and complete all lessons to unlock"}</span>
+            )}
+          </div>
+        </section>
+      )}
+
       {practicalMilestone && <section className="border-l-4 border-[var(--primary)] bg-[var(--primary)]/[0.05] px-5 py-5" aria-label="Practical lab">{practicalMilestone}</section>}
 
       {challenge && <section className="border-l-4 border-[var(--accent)] bg-[var(--accent-soft)] px-5 py-4" aria-label="Practical challenge">{challenge}</section>}
 
       <div className="flex justify-end border-t border-[var(--border)] pt-6">
-        {isSignedIn ? <button type="button" onClick={onContinue} disabled={isContinuing || !firstAvailable} className="inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[var(--primary-dark)] disabled:cursor-wait disabled:opacity-70">{isContinuing ? "Preparing lesson…" : "Continue Learning →"}</button> : <Link href="/login" className="inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[var(--primary-dark)]">Continue Learning →</Link>}
+        {isSignedIn ? <button type="button" onClick={onContinue} disabled={isContinuing || !hasNextStep} className="inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[var(--primary-dark)] disabled:cursor-wait disabled:opacity-70">{isContinuing ? "Preparing…" : continueLabel ?? "Continue Learning →"}</button> : <Link href="/login" className="inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--primary)] px-5 py-2 text-sm font-semibold text-white shadow-sm hover:bg-[var(--primary-dark)]">Continue Learning →</Link>}
       </div>
     </div>
   );

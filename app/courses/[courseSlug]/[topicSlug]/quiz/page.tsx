@@ -29,6 +29,9 @@ export default function TopicQuizPage({
   const [cmsCourseTitle, setCmsCourseTitle] = useState<string | null>(null);
   const [cmsTopicTitle, setCmsTopicTitle] = useState<string | null>(null);
   const [cmsQuestions, setCmsQuestions] = useState<QuizQuestionSchema[] | null>(null);
+  const [cmsNextTopicSlug, setCmsNextTopicSlug] = useState<string | null>(null);
+  const [cmsSubtopicIds, setCmsSubtopicIds] = useState<string[]>([]);
+  const [cmsLessonsIncomplete, setCmsLessonsIncomplete] = useState<boolean | null>(null);
 
   useEffect(() => {
     if (!isLegacy) return;
@@ -56,38 +59,64 @@ export default function TopicQuizPage({
         setCmsChecked(true);
         return;
       }
-      const { data: topic } = await supabase
+      const { data: topics } = await supabase
         .from("topics")
-        .select("id, title, slug")
+        .select("id, title, slug, sequence_order")
         .eq("course_id", course.id)
-        .eq("slug", params.topicSlug)
-        .maybeSingle();
+        .order("sequence_order", { ascending: true });
+      const topicIndex = (topics ?? []).findIndex((item) => item.slug === params.topicSlug);
+      const topic = topicIndex >= 0 ? (topics ?? [])[topicIndex] : null;
       if (!topic) {
         setCmsChecked(true);
         return;
       }
       setCmsCourseTitle(course.title);
       setCmsTopicTitle(topic.title);
+      setCmsNextTopicSlug((topics ?? [])[topicIndex + 1]?.slug ?? null);
 
       const { data: subtopics } = await supabase
         .from("subtopics")
         .select("id")
         .eq("topic_id", topic.id)
         .order("sequence_order", { ascending: true });
-      const lastSubtopicId = (subtopics ?? [])[subtopics!.length - 1]?.id;
-      if (lastSubtopicId) {
-        const { data: quiz } = await supabase
+      const subtopicIds = (subtopics ?? []).map((item) => item.id);
+      setCmsSubtopicIds(subtopicIds);
+      if (subtopicIds.length > 0) {
+        // The topic assessment aggregates EVERY lesson's knowledge-check
+        // questions in lesson order — CMS quizzes are stored per subtopic, so
+        // reading only the final lesson's quiz silently dropped most questions.
+        const { data: quizzes } = await supabase
           .from("quizzes")
-          .select("questions_json")
-          .eq("subtopic_id", lastSubtopicId)
-          .maybeSingle();
-        if (quiz && Array.isArray(quiz.questions_json) && quiz.questions_json.length > 0) {
-          setCmsQuestions(quiz.questions_json as QuizQuestionSchema[]);
+          .select("subtopic_id, questions_json")
+          .in("subtopic_id", subtopicIds);
+        const orderIndex = new Map(subtopicIds.map((id, position) => [id, position] as const));
+        const allQuestions = (quizzes ?? [])
+          .slice()
+          .sort((a, b) => (orderIndex.get(a.subtopic_id) ?? 0) - (orderIndex.get(b.subtopic_id) ?? 0))
+          .flatMap((quiz) => (Array.isArray(quiz.questions_json) ? (quiz.questions_json as QuizQuestionSchema[]) : []));
+        if (allQuestions.length > 0) {
+          setCmsQuestions(allQuestions);
         }
       }
       setCmsChecked(true);
     })();
   }, [params.courseSlug, params.topicSlug]);
+
+  // Mirror the legacy gate for CMS topics: every lesson must be completed
+  // before the assessment is available.
+  useEffect(() => {
+    if (authLoading || !user || !cmsChecked || cmsSubtopicIds.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const progress = await loadRemoteProgress(user.id);
+      if (cancelled) return;
+      const completed = progress[cmsModuleSlug(params.courseSlug, params.topicSlug)]?.lessonsCompleted ?? [];
+      setCmsLessonsIncomplete(cmsSubtopicIds.some((id) => !completed.includes(id)));
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authLoading, user, cmsChecked, cmsSubtopicIds, params.courseSlug, params.topicSlug]);
 
   // Use the CMS whenever the published course/topic exists. The legacy quiz
   // path is intentionally retained only as a compatibility fallback.
@@ -191,6 +220,26 @@ export default function TopicQuizPage({
     );
   }
 
+  if (user && cmsLessonsIncomplete === null) return null;
+
+  if (cmsLessonsIncomplete) {
+    return (
+      <div className="mx-auto max-w-lg border border-[var(--border)] bg-[var(--surface)] p-8 text-center shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-[0.13em] text-[var(--primary)]">Topic assessment</p>
+        <h1 className="mt-2 text-xl font-bold text-[var(--text-hi)]">Finish the lessons first</h1>
+        <p className="mt-2 text-sm text-[var(--text-mid)]">
+          Complete every lesson in this topic before taking the assessment.
+        </p>
+        <Link
+          href={`/courses/${params.courseSlug}/${params.topicSlug}`}
+          className="mt-6 inline-block rounded-md bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
+        >
+          ← Back to Topic
+        </Link>
+      </div>
+    );
+  }
+
   const moduleSlug = cmsModuleSlug(params.courseSlug, params.topicSlug);
   const questionsWithId = cmsQuestions.map((q, i) => ({ ...q, id: `q${i}` }));
 
@@ -210,7 +259,7 @@ export default function TopicQuizPage({
         moduleTitle={cmsTopicTitle}
         questions={questionsWithId}
         label="Assessment"
-        nextHref={`/courses/${params.courseSlug}`}
+        nextHref={cmsNextTopicSlug ? `/courses/${params.courseSlug}/${cmsNextTopicSlug}` : "/learning-path"}
       />
     </div>
   );
