@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const firstSegmentLabel: Record<string, string> = {
   dashboard: "Home",
+  "learning-path": "Learning Path",
   courses: "Courses",
   labs: "Labs",
 };

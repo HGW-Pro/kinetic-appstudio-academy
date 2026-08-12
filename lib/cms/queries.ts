@@ -2,6 +2,7 @@ import "server-only";
 import { createSupabaseServerClient } from "../supabase/server";
 import type { CourseRecord, TopicRecord, SubtopicRecord, QuizRecord } from "../admin/types";
 import { cmsModuleSlug } from "./shared";
+import type { LearningPathCourse, LearningPathTopic } from "../../components/academy/learningPathTypes";
 
 // Read-only fetchers for the PUBLIC student-facing side of the CMS. Only
 // published courses (is_published = true) are ever returned to public
@@ -202,6 +203,88 @@ export async function getCmsCoursesWithStats(): Promise<CmsCourseWithStats[]> {
       subtopicCount,
       quizQuestionCount,
     } as CmsCourseWithStats;
+  });
+}
+
+// The learning path is derived exclusively from the published CMS
+// curriculum. Progress is deliberately not fetched here: it belongs to the
+// authenticated learner and is loaded by the client through the existing
+// compatible progress helper.
+export async function getLearningPathData(): Promise<LearningPathCourse[]> {
+  const supabase = createSupabaseServerClient();
+  const { data, error } = await supabase
+    .from("courses")
+    .select(
+      `*,
+       topics (
+         id, title, slug, sequence_order, difficulty, est_minutes,
+         subtopics ( id, title, sequence_order )
+       )`
+    )
+    .eq("is_published", true)
+    .order("sequence_order", { ascending: true });
+
+  if (error || !data) {
+    if (error) console.error("getLearningPathData failed", error);
+    return [];
+  }
+
+  type RawTopic = {
+    id: string;
+    title: string;
+    slug: string;
+    sequence_order: number;
+    difficulty: string | null;
+    est_minutes: number | null;
+    subtopics: { id: string; title: string; sequence_order: number }[] | null;
+  };
+  type RawCourse = CourseRecord & {
+    prerequisite_topic_id?: string | null;
+    topics: RawTopic[] | null;
+  };
+
+  return (data as unknown as RawCourse[]).map((course) => {
+    const topics: LearningPathTopic[] = (course.topics ?? [])
+      .sort((a, b) => a.sequence_order - b.sequence_order)
+      .map((topic) => ({
+        id: topic.id,
+        title: topic.title,
+        slug: topic.slug,
+        sequenceOrder: topic.sequence_order,
+        difficulty: topic.difficulty && topic.difficulty.trim() ? topic.difficulty : null,
+        estMinutes: topic.est_minutes && topic.est_minutes > 0 ? topic.est_minutes : null,
+        subtopicCount: topic.subtopics?.length ?? 0,
+        subtopics: (topic.subtopics ?? [])
+          .sort((a, b) => a.sequence_order - b.sequence_order)
+          .map((subtopic) => ({
+            id: subtopic.id,
+            title: subtopic.title,
+            sequenceOrder: subtopic.sequence_order,
+          })),
+      }));
+    const configuredDurations = topics.reduce((sum, topic) => sum + (topic.estMinutes ?? 0), 0);
+    const unconfiguredLessons = topics.reduce(
+      (sum, topic) => sum + (topic.estMinutes === null ? topic.subtopicCount : 0),
+      0
+    );
+    const difficultyValues = Array.from(new Set(topics.map((topic) => topic.difficulty).filter(Boolean))) as string[];
+
+    return {
+      id: course.id,
+      title: course.title,
+      slug: course.slug,
+      description: course.description,
+      sequenceOrder: course.sequence_order,
+      prerequisiteTopicId: course.prerequisite_topic_id ?? null,
+      topics,
+      topicCount: topics.length,
+      lessonCount: topics.reduce((sum, topic) => sum + topic.subtopicCount, 0),
+      // Existing topic views already use five minutes per lesson when an
+      // estimate is absent. Preserve that documented presentation fallback
+      // rather than inventing a separate path-only duration.
+      estMinutes: topics.length ? configuredDurations + unconfiguredLessons * 5 : null,
+      difficulty: difficultyValues.length === 1 ? difficultyValues[0] : difficultyValues.length > 1 ? "Mixed difficulty" : null,
+    };
   });
 }
 

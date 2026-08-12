@@ -9,7 +9,7 @@ type IconName = "home" | "path" | "courses" | "challenge" | "labs" | "glossary" 
 
 const navigation: { label: string; href?: string; icon: IconName; comingSoon?: boolean }[] = [
   { label: "Home", href: "/dashboard", icon: "home" },
-  { label: "Learning Path", icon: "path", comingSoon: true },
+  { label: "Learning Path", href: "/learning-path", icon: "path" },
   { label: "Courses", href: "/courses", icon: "courses" },
   { label: "Challenges", icon: "challenge", comingSoon: true },
   { label: "Labs", href: "/labs", icon: "labs" },

@@ -5,9 +5,9 @@ import { usePathname } from "next/navigation";
 
 const links = [
   { href: "/dashboard", label: "Home", icon: "⌂" },
+  { href: "/learning-path", label: "Path", icon: "⌁" },
   { href: "/courses", label: "Courses", icon: "▤" },
   { href: "/labs", label: "Labs", icon: "⌁" },
-  { href: "/dashboard", label: "Progress", icon: "▥" },
 ];
 
 export default function MobileAcademyNav() {

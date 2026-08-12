@@ -4,7 +4,7 @@ import { usePathname } from "next/navigation";
 import NavBar from "./NavBar";
 
 function isAcademyRoute(pathname: string | null) {
-  return ["/dashboard", "/courses", "/labs"].some(
+  return ["/dashboard", "/learning-path", "/courses", "/labs"].some(
     (route) => pathname === route || pathname?.startsWith(`${route}/`)
   );
 }

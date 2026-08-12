@@ -1,7 +1,9 @@
 import CmsDashboardClient from "../../components/CmsDashboardClient";
+import { getLearningPathData } from "../../lib/cms/queries";
 
 export const dynamic = "force-dynamic";
 
-export default function DashboardPage() {
-  return <CmsDashboardClient />;
+export default async function DashboardPage() {
+  const courses = await getLearningPathData();
+  return <CmsDashboardClient courses={courses} />;
 }

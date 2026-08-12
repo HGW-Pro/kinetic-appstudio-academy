@@ -3,128 +3,186 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "./AuthProvider";
-import { supabase } from "../lib/supabaseClient";
+import { getEmployeeSkillProgress } from "../lib/cms/skill-progress";
 import { cmsModuleSlug } from "../lib/cms/shared";
-import { loadRemoteProgress, type ProgressState } from "../lib/progress";
+import { loadLocalProgress, loadRemoteProgress, type ProgressState } from "../lib/progress";
+import LearningPath from "./academy/LearningPath";
+import SkillProgress from "./academy/SkillProgress";
+import { getCurrentLearning, getLearningPathProgress } from "./academy/learningPathState";
+import type { LearningPathCourse, SkillProgressItem } from "./academy/learningPathTypes";
 
-type CourseSummary = {
-  id: string;
-  title: string;
-  slug: string;
-  description: string | null;
-  image_url: string | null;
-  topics: { id: string; title: string; slug: string; subtopicCount: number }[];
+type DashboardProps = {
+  courses: LearningPathCourse[];
 };
 
-export default function CmsDashboardClient() {
+export default function CmsDashboardClient({ courses }: DashboardProps) {
   const { user, loading: authLoading } = useAuth();
-  const [courses, setCourses] = useState<CourseSummary[]>([]);
   const [progress, setProgress] = useState<ProgressState>({});
+  const [skillProgress, setSkillProgress] = useState<SkillProgressItem[] | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (authLoading) return;
     let cancelled = false;
-    (async () => {
+
+    async function loadDashboard() {
       setLoading(true);
-      setError(null);
-      const { data: courseRows, error: courseError } = await supabase
-        .from("courses")
-        .select("id, title, slug, description, image_url")
-        .eq("is_published", true)
-        .order("sequence_order", { ascending: true });
-      if (courseError) {
-        if (!cancelled) {
-          setError(courseError.message);
-          setLoading(false);
-        }
-        return;
-      }
-      const ids = (courseRows ?? []).map((c) => c.id);
-      const { data: topicRows, error: topicError } = ids.length
-        ? await supabase.from("topics").select("id, course_id, title, slug").in("course_id", ids).order("sequence_order")
-        : { data: [], error: null };
-      if (topicError) {
-        if (!cancelled) {
-          setError(topicError.message);
-          setLoading(false);
-        }
-        return;
-      }
-      const topicIds = (topicRows ?? []).map((t) => t.id);
-      const { data: subtopicRows, error: subtopicError } = topicIds.length
-        ? await supabase.from("subtopics").select("id, topic_id").in("topic_id", topicIds)
-        : { data: [], error: null };
-      if (subtopicError) {
-        if (!cancelled) {
-          setError(subtopicError.message);
-          setLoading(false);
-        }
-        return;
-      }
-      const counts = new Map<string, number>();
-      for (const s of subtopicRows ?? []) counts.set(s.topic_id, (counts.get(s.topic_id) ?? 0) + 1);
-      const byCourse = new Map<string, { id: string; title: string; slug: string; subtopicCount: number }[]>();
-      for (const t of topicRows ?? []) {
-        const list = byCourse.get(t.course_id) ?? [];
-        list.push({ id: t.id, title: t.title, slug: t.slug, subtopicCount: counts.get(t.id) ?? 0 });
-        byCourse.set(t.course_id, list);
-      }
-      const p = user ? await loadRemoteProgress(user.id) : {};
+      const [nextProgress, skills] = await Promise.all([
+        user ? loadRemoteProgress(user.id) : Promise.resolve(loadLocalProgress()),
+        getEmployeeSkillProgress(user?.id),
+      ]);
       if (!cancelled) {
-        setCourses((courseRows ?? []).map((c) => ({ ...c, topics: byCourse.get(c.id) ?? [] })));
-        setProgress(p);
+        setProgress(nextProgress);
+        setSkillProgress(skills);
         setLoading(false);
       }
-    })();
-    return () => { cancelled = true; };
+    }
+
+    void loadDashboard();
+    return () => {
+      cancelled = true;
+    };
   }, [authLoading, user]);
 
-  const overall = useMemo(() => {
-    let total = 0, complete = 0, certified = 0;
-    for (const c of courses) for (const t of c.topics) {
-      total += t.subtopicCount;
-      const p = progress[cmsModuleSlug(c.slug, t.slug)];
-      complete += p?.lessonsCompleted.length ?? 0;
-      if (p?.completedAt) certified += 1;
-    }
-    return { total, complete, certified, pct: total ? Math.min(100, Math.round((complete / total) * 100)) : 0 };
-  }, [courses, progress]);
+  const path = useMemo(() => getLearningPathProgress(courses, progress), [courses, progress]);
+  const current = useMemo(() => getCurrentLearning(courses, progress), [courses, progress]);
+  const courseProxySkills = useMemo(
+    () => path.map((item) => ({ id: item.course.id, name: item.course.title, percentage: item.completion })),
+    [path]
+  );
+  const skillsSource = skillProgress?.length ? "skills" : courseProxySkills.length ? "course-proxy" : "empty";
 
-  if (loading) return <div className="py-16 text-center text-sm text-[var(--text-lo)]">Loading your learning dashboard…</div>;
-  if (error) return <div className="rounded-xl border border-[var(--error)]/30 bg-[var(--error-soft)] p-5 text-sm text-[var(--error)]">⚠️ Could not load dashboard: {error}</div>;
+  const totals = useMemo(() => {
+    const totalLessons = path.reduce((sum, item) => sum + item.totalLessons, 0);
+    const completedLessons = path.reduce((sum, item) => sum + item.completedLessons, 0);
+    const completedTopics = path.reduce((sum, item) => sum + item.completedTopics, 0);
+    const totalTopics = courses.reduce((sum, course) => sum + course.topicCount, 0);
+    const bestScores = Object.values(progress)
+      .map((item) => item.quizScore)
+      .filter((score): score is number => typeof score === "number");
+    return {
+      completion: totalLessons ? Math.round((completedLessons / totalLessons) * 100) : 0,
+      completedLessons,
+      totalLessons,
+      completedTopics,
+      totalTopics,
+      averageQuiz: bestScores.length ? Math.round(bestScores.reduce((sum, score) => sum + score, 0) / bestScores.length) : null,
+    };
+  }, [courses, path, progress]);
+
+  const learnerName =
+    (typeof user?.user_metadata?.full_name === "string" && user.user_metadata.full_name) ||
+    user?.email?.split("@")[0] ||
+    "there";
+  const currentTopic = current?.course.topics.find(
+    (topic) => !progress[cmsModuleSlug(current.course.slug, topic.slug)]?.completedAt
+  );
+  const currentSubtopic = currentTopic?.subtopics.find(
+    (subtopic) => !progress[cmsModuleSlug(current?.course.slug ?? "", currentTopic.slug)]?.lessonsCompleted.includes(subtopic.id)
+  );
+
+  if (loading) {
+    return <div className="py-16 text-center text-sm text-[var(--text-lo)]">Loading your learning dashboard…</div>;
+  }
 
   return (
-    <div className="space-y-8">
-      <div className="glass-card glow-border rounded-2xl p-7">
-        <p className="text-xs font-semibold uppercase tracking-wide text-[var(--primary)]">Learning Dashboard</p>
-        <h1 className="mt-2 text-3xl font-bold text-[var(--text-hi)]">Your certification progress</h1>
-        <div className="mt-6 grid gap-4 sm:grid-cols-3">
-          <div><p className="text-2xl font-bold text-[var(--text-hi)]">{overall.pct}%</p><p className="text-xs text-[var(--text-lo)]">Overall progress</p></div>
-          <div><p className="text-2xl font-bold text-[var(--text-hi)]">{overall.complete}/{overall.total}</p><p className="text-xs text-[var(--text-lo)]">Subtopics completed</p></div>
-          <div><p className="text-2xl font-bold text-[var(--text-hi)]">{overall.certified}</p><p className="text-xs text-[var(--text-lo)]">Topics certified</p></div>
+    <div className="space-y-10 pb-4">
+      <section className="max-w-3xl">
+        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">Learning dashboard</p>
+        <h1 className="mt-2 text-3xl font-bold tracking-tight text-[var(--text-hi)]">Welcome back, {learnerName}</h1>
+        <p className="mt-3 text-sm leading-6 text-[var(--text-mid)]">
+          Pick up where you left off and keep building practical Kinetic skills.
+        </p>
+      </section>
+
+      <section aria-labelledby="continue-heading" className="border-y border-[var(--border)] py-7">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">Next step</p>
+            <h2 id="continue-heading" className="mt-1 text-xl font-semibold text-[var(--text-hi)]">Continue learning</h2>
+          </div>
+          {current && <span className="text-sm tabular-nums text-[var(--text-lo)]">{current.completion}% complete</span>}
         </div>
-        <div className="progress-track mt-6 h-3"><div className="progress-fill h-full" style={{ width: `${overall.pct}%` }} /></div>
+
+        {current ? (
+          <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+            <div>
+              <p className="text-sm font-medium text-[var(--primary)]">{current.course.title}</p>
+              <h3 className="mt-1 text-2xl font-semibold tracking-tight text-[var(--text-hi)]">
+                {currentSubtopic?.title ?? currentTopic?.title ?? "Continue your course"}
+              </h3>
+              <p className="mt-2 text-sm text-[var(--text-mid)]">
+                {currentSubtopic
+                  ? `Up next in ${currentTopic?.title}.`
+                  : `${current.completedLessons} of ${current.totalLessons} lessons completed.`}
+              </p>
+              <div className="progress-track mt-5 h-2.5 max-w-2xl" role="progressbar" aria-label={`${current.course.title} progress`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={current.completion}>
+                <div className="progress-fill h-full" style={{ width: `${current.completion}%` }} />
+              </div>
+            </div>
+            <Link
+              href={`/courses/${current.course.slug}${currentTopic ? `/${currentTopic.slug}` : ""}`}
+              className="inline-flex min-h-11 items-center justify-center rounded-md bg-[var(--primary)] px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]"
+            >
+              {current.completion ? "Continue learning" : "Start course"} <span aria-hidden="true" className="ml-2">→</span>
+            </Link>
+          </div>
+        ) : courses.length ? (
+          <div className="mt-5 flex flex-wrap items-center justify-between gap-4">
+            <p className="text-sm text-[var(--text-mid)]">You have completed every published course in this learning path.</p>
+            <Link href="/learning-path" className="text-sm font-semibold text-[var(--primary)] hover:text-[var(--primary-dark)]">Review your path →</Link>
+          </div>
+        ) : (
+          <p className="mt-5 text-sm text-[var(--text-mid)]">Published courses will appear here as soon as they are ready.</p>
+        )}
+      </section>
+
+      <section aria-labelledby="journey-heading">
+        <div className="flex items-baseline justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--primary)]">Curriculum</p>
+            <h2 id="journey-heading" className="mt-1 text-xl font-semibold text-[var(--text-hi)]">Your Kinetic journey</h2>
+          </div>
+          <Link href="/learning-path" className="text-sm font-semibold text-[var(--primary)] hover:text-[var(--primary-dark)]">View learning path →</Link>
+        </div>
+        <div className="mt-4 max-w-4xl">
+          <LearningPath courses={courses} progress={progress} compact />
+        </div>
+      </section>
+
+      <div className="grid gap-x-12 gap-y-10 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,0.75fr)]">
+        <SkillProgress items={skillProgress?.length ? skillProgress : courseProxySkills} source={skillsSource} />
+
+        <section aria-labelledby="challenge-heading" className="border-l-2 border-[var(--accent)] px-5 py-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">Practice</p>
+          <h2 id="challenge-heading" className="mt-1 text-lg font-semibold text-[var(--text-hi)]">Today&apos;s challenge</h2>
+          <p className="mt-2 text-sm leading-6 text-[var(--text-mid)]">
+            Practical challenges are being prepared for this learning path.
+          </p>
+          <span className="mt-4 inline-flex rounded-full border border-[var(--border)] px-3 py-1 text-xs font-semibold text-[var(--text-lo)]">
+            Coming soon
+          </span>
+        </section>
       </div>
 
-      <section className="space-y-4">
-        <h2 className="text-xl font-semibold text-[var(--text-hi)]">Your courses</h2>
-        {courses.map((course) => {
-          const total = course.topics.reduce((n, t) => n + t.subtopicCount, 0);
-          const done = course.topics.reduce((n, t) => n + (progress[cmsModuleSlug(course.slug, t.slug)]?.lessonsCompleted.length ?? 0), 0);
-          const pct = total ? Math.min(100, Math.round((done / total) * 100)) : 0;
-          return <div key={course.id} className="glass-card rounded-xl p-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="flex gap-4"><div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded-lg bg-[var(--surface-2)] text-2xl">{course.image_url ? <img src={course.image_url} alt="" className="h-full w-full object-cover" /> : "📚"}</div><div><h3 className="font-semibold text-[var(--text-hi)]">{course.title}</h3><p className="mt-1 text-sm text-[var(--text-mid)]">{course.description}</p></div></div>
-              <Link href={`/courses/${course.slug}`} className="rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--primary-dark)]">Continue →</Link>
-            </div>
-            <div className="mt-5 progress-track h-2"><div className="progress-fill h-full" style={{ width: `${pct}%` }} /></div>
-            <p className="mt-2 text-xs text-[var(--text-lo)]">{done}/{total} subtopics complete · {course.topics.length} topics · {pct}%</p>
-            <div className="mt-4 grid gap-2 sm:grid-cols-2">{course.topics.map((topic, i) => { const p = progress[cmsModuleSlug(course.slug, topic.slug)]; return <div key={topic.id} className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 py-2 text-xs"><span className="mr-2 font-semibold text-[var(--primary)]">{p?.completedAt ? "✓" : i + 1}</span>{topic.title}<span className="float-right text-[var(--text-lo)]">{p?.lessonsCompleted.length ?? 0}/{topic.subtopicCount}</span></div>; })}</div>
-          </div>;
-        })}
+      <section aria-labelledby="statistics-heading" className="border-t border-[var(--border)] pt-7">
+        <h2 id="statistics-heading" className="text-sm font-semibold text-[var(--text-hi)]">Learning statistics</h2>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Statistic label="Overall progress" value={`${totals.completion}%`} />
+          <Statistic label="Lessons completed" value={`${totals.completedLessons}/${totals.totalLessons}`} />
+          <Statistic label="Topics certified" value={`${totals.completedTopics}/${totals.totalTopics}`} />
+          <Statistic label="Best quiz average" value={totals.averageQuiz === null ? "No attempts yet" : `${totals.averageQuiz}%`} />
+        </div>
       </section>
+    </div>
+  );
+}
+
+function Statistic({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="border-l border-[var(--border-strong)] pl-4">
+      <p className="text-xl font-bold tabular-nums text-[var(--text-hi)]">{value}</p>
+      <p className="mt-1 text-xs text-[var(--text-lo)]">{label}</p>
     </div>
   );
 }
