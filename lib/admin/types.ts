@@ -3,12 +3,27 @@
 
 export type ContentBlockType = "SlideText" | "VisualMockup" | "FlowDiagram";
 
+// SlideText.body is now an ORDERED array of nodes rather than a flat
+// string[] with a separate images[] array. This is what allows an admin
+// to insert an image after a specific paragraph instead of images always
+// being dumped in a gallery below all the text.
+export interface ParagraphNode {
+  type: "paragraph";
+  text: string;
+}
+export interface ImageNode {
+  type: "image";
+  src: string;
+  alt: string;
+  caption?: string;
+}
+export type SlideNode = ParagraphNode | ImageNode;
+
 export interface SlideTextBlock {
   type: "SlideText";
   heading?: string;
-  body: string[]; // paragraphs; **bold** inline markup supported by the student UI
+  body: SlideNode[];
   proTip?: string;
-  images?: { src: string; alt: string; caption?: string }[];
 }
 
 export interface VisualMockupBlock {
@@ -140,6 +155,25 @@ function assertArray(value: unknown, path: string): unknown[] {
   return value;
 }
 
+function validateSlideNode(node: unknown, path: string): SlideNode {
+  if (typeof node !== "object" || node === null) {
+    throw new ValidationError(path, "must be an object");
+  }
+  const n = node as Record<string, unknown>;
+  if (n.type === "paragraph") {
+    return { type: "paragraph", text: assertString(n.text, `${path}.text`, { minLen: 1 }) };
+  }
+  if (n.type === "image") {
+    return {
+      type: "image",
+      src: assertString(n.src, `${path}.src`, { minLen: 1 }),
+      alt: assertString(n.alt, `${path}.alt`, { minLen: 1 }),
+      caption: n.caption !== undefined ? assertString(n.caption, `${path}.caption`) : undefined,
+    };
+  }
+  throw new ValidationError(`${path}.type`, "must be 'paragraph' or 'image'");
+}
+
 export function validateContentBlock(block: unknown, path: string): ContentBlock {
   if (typeof block !== "object" || block === null) {
     throw new ValidationError(path, "must be an object");
@@ -148,30 +182,14 @@ export function validateContentBlock(block: unknown, path: string): ContentBlock
   const type = b.type;
 
   if (type === "SlideText") {
-    const body = assertArray(b.body, `${path}.body`).map((p, i) =>
-      assertString(p, `${path}.body[${i}]`)
-    );
-    if (body.length === 0) throw new ValidationError(`${path}.body`, "must have at least one paragraph");
-    let images: SlideTextBlock["images"];
-    if (b.images !== undefined) {
-      images = assertArray(b.images, `${path}.images`).map((img, i) => {
-        if (typeof img !== "object" || img === null) {
-          throw new ValidationError(`${path}.images[${i}]`, "must be an object");
-        }
-        const im = img as Record<string, unknown>;
-        return {
-          src: assertString(im.src, `${path}.images[${i}].src`, { minLen: 1 }),
-          alt: assertString(im.alt, `${path}.images[${i}].alt`, { minLen: 1 }),
-          caption: im.caption !== undefined ? assertString(im.caption, `${path}.images[${i}].caption`) : undefined,
-        };
-      });
-    }
+    const bodyRaw = assertArray(b.body, `${path}.body`);
+    if (bodyRaw.length === 0) throw new ValidationError(`${path}.body`, "must have at least one node");
+    const body = bodyRaw.map((n, i) => validateSlideNode(n, `${path}.body[${i}]`));
     return {
       type: "SlideText",
       heading: b.heading !== undefined ? assertString(b.heading, `${path}.heading`) : undefined,
       body,
       proTip: b.proTip !== undefined ? assertString(b.proTip, `${path}.proTip`) : undefined,
-      images,
     };
   }
 
@@ -321,4 +339,43 @@ export function validateBulkImportPayload(raw: unknown): BulkImportPayload {
   });
 
   return { course, topics };
+}
+
+// ---------- Shuffle helpers ----------
+// Fisher-Yates shuffle. Used to randomize a freshly-authored/imported
+// quiz question's option order at SAVE time (not just at quiz-attempt
+// time in QuizEngine), so the stored data itself never has a predictable
+// "correct answer is always position N" pattern baked in from how an
+// admin (or an AI generating bulk-import JSON) happened to type options.
+function shuffle<T>(arr: T[]): T[] {
+  const copy = [...arr];
+  for (let i = copy.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+export function shuffleQuizQuestion(q: QuizQuestionSchema): QuizQuestionSchema {
+  const order = shuffle(q.options.map((_, i) => i));
+  const options = order.map((i) => q.options[i]);
+  const correctIndex = order.indexOf(q.correctIndex);
+  return { ...q, options, correctIndex };
+}
+
+export function shuffleQuestions(questions: QuizQuestionSchema[]): QuizQuestionSchema[] {
+  return questions.map(shuffleQuizQuestion);
+}
+
+export function shuffleBulkImportPayload(payload: BulkImportPayload): BulkImportPayload {
+  return {
+    ...payload,
+    topics: payload.topics.map((t) => ({
+      ...t,
+      subtopics: t.subtopics.map((s) => ({
+        ...s,
+        quiz: s.quiz ? { questions_json: shuffleQuestions(s.quiz.questions_json) } : undefined,
+      })),
+    })),
+  };
 }

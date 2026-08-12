@@ -2,29 +2,29 @@
 
 import { assertAdminOrThrow } from "./guard";
 import { createSupabaseServerClient } from "../supabase/server";
-import { validateBulkImportPayload, ValidationError, type ContentBlock } from "./types";
+import {
+  validateBulkImportPayload,
+  shuffleBulkImportPayload,
+  ValidationError,
+  type ContentBlock,
+  type SlideNode,
+} from "./types";
 import type { ActionResult } from "./actions";
 
-// One-time migration: reads the REAL, currently-live curriculum data
-// straight from the TypeScript modules that power the student site
-// (lib/allModules.ts + lib/courses.ts) and imports it into the new
-// courses/topics/subtopics/quizzes tables via the same atomic
-// admin_bulk_import_course RPC the Bulk Import UI uses.
+// One-time migration: reads the REAL, currently-live curriculum data from
+// lib/allModules.ts and lib/courses.ts and imports it into the new CMS
+// tables via the same atomic admin_bulk_import_course RPC used by Bulk
+// Import. Dynamic imports + runtime shape checks (not static named
+// imports) so a missing/renamed export degrades to a warning rather than
+// a build failure.
 //
-// Uses dynamic imports + defensive shape-checking rather than static
-// named imports: we don't have full visibility into every export those
-// files provide, so this avoids a build failure if an assumed export
-// (e.g. a `courses` array) doesn't exist under that exact name, and
-// instead degrades to a per-source warning that admins can see.
-//
-// Deliberately conservative about what it converts:
-//   - lesson.body / lesson.proTip / lesson.images -> a single SlideText
-//     content block (the part of every lesson we're certain about).
-//   - lesson.mockup / lesson.flow are NOT converted (their exact prop
-//     shapes weren't available to reconstruct safely). Lessons keep their
-//     text content but get flagged in `warnings` for manual re-creation.
-//   - A topic/module's single quiz is attached to its LAST subtopic,
-//     since the new schema ties quizzes to a subtopic, not a whole topic.
+// IMPORTANT FIX: the first version of this migration assumed every legacy
+// image entry already had a `src` field. In practice the legacy lesson
+// data uses inconsistent field names (src/url/imageUrl), which caused
+// EVERY course import to fail validation ("images[0].src: must be a
+// string") and silently import nothing. normalizeLegacyImage() below now
+// tries every known field name, matching the same defensive pattern
+// already used in components/ImageGallery.tsx.
 
 interface LegacyLesson {
   id?: string;
@@ -33,7 +33,7 @@ interface LegacyLesson {
   proTip?: string;
   mockup?: unknown;
   flow?: unknown;
-  images?: { src: string; alt: string; caption?: string }[];
+  images?: Record<string, unknown>[];
 }
 
 interface LegacyQuizQuestion {
@@ -80,10 +80,40 @@ function isLegacyCourseLike(x: unknown): x is LegacyCourseLike {
   );
 }
 
+// Tries every field name we've seen used for image src/alt/caption across
+// this codebase, instead of assuming one exact shape.
+function normalizeLegacyImage(img: Record<string, unknown>): { src: string; alt: string; caption?: string } | null {
+  const src = img.src ?? img.url ?? img.imageUrl ?? img.href ?? img.path;
+  if (typeof src !== "string" || src.trim().length === 0) return null;
+  const alt = img.alt ?? img.title ?? img.caption ?? "Lesson image";
+  const caption = img.caption ?? img.description ?? img.title;
+  return {
+    src,
+    alt: typeof alt === "string" ? alt : "Lesson image",
+    caption: typeof caption === "string" ? caption : undefined,
+  };
+}
+
 function lessonToContentBlocks(lesson: LegacyLesson, warnings: string[], contextLabel: string): ContentBlock[] {
-  const body = lesson.body && lesson.body.length > 0 ? lesson.body : ["(no content)"];
+  const body: SlideNode[] = (lesson.body && lesson.body.length > 0 ? lesson.body : ["(no content)"]).map(
+    (text): SlideNode => ({ type: "paragraph", text })
+  );
+
+  if (lesson.images && lesson.images.length > 0) {
+    for (const raw of lesson.images) {
+      const normalized = normalizeLegacyImage(raw);
+      if (normalized) {
+        body.push({ type: "image", ...normalized });
+      } else {
+        warnings.push(
+          `${contextLabel} > "${lesson.title}": an image entry had no recognizable src/url field and was skipped — fields present: ${Object.keys(raw).join(", ") || "(none)"}.`
+        );
+      }
+    }
+  }
+
   const blocks: ContentBlock[] = [
-    { type: "SlideText", heading: lesson.title, body, proTip: lesson.proTip, images: lesson.images },
+    { type: "SlideText", heading: lesson.title, body, proTip: lesson.proTip },
   ];
   if (lesson.mockup) {
     warnings.push(`${contextLabel} > "${lesson.title}": had a visual mockup that was NOT migrated (needs manual re-creation).`);
@@ -130,7 +160,11 @@ async function tryImportCourse(
   const payload = buildPayloadForCourse(course, sequenceOrder, warnings);
   try {
     const validated = validateBulkImportPayload(payload);
-    const { error } = await supabase.rpc("admin_bulk_import_course", { payload: validated });
+    // Shuffle every quiz question's option order at import time, so
+    // migrated quizzes never carry over a predictable "correct answer is
+    // always position N" pattern from the original hand-authored data.
+    const shuffled = shuffleBulkImportPayload(validated);
+    const { error } = await supabase.rpc("admin_bulk_import_course", { payload: shuffled });
     if (error) {
       failures.push(`"${course.title}": ${error.message}`);
     } else {
@@ -153,8 +187,6 @@ export async function migrateLegacyCurriculum(): Promise<
     const failures: string[] = [];
     let sequenceOrder = 0;
 
-    // Source 1: lib/allModules.ts — flat list of modules, each becomes its
-    // own single-topic course (topic slug mirrors the module slug).
     try {
       const allModulesMod: Record<string, unknown> = await import("../allModules");
       const candidateArrays = Object.values(allModulesMod).filter((v) => Array.isArray(v)) as unknown[][];
@@ -179,7 +211,6 @@ export async function migrateLegacyCurriculum(): Promise<
       warnings.push(`lib/allModules.ts could not be loaded: ${err instanceof Error ? err.message : String(err)}`);
     }
 
-    // Source 2: lib/courses.ts — already course > topic > lesson shaped.
     try {
       const coursesMod: Record<string, unknown> = await import("../courses");
       const candidateArrays = Object.values(coursesMod).filter((v) => Array.isArray(v)) as unknown[][];

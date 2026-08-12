@@ -1,19 +1,23 @@
 import type { BulkImportPayload } from "./types";
 
 // The exact JSON structure BulkImportForm validates pasted data against.
-// This is also what gets downloaded as template.json so admins (or an AI
-// generating curriculum data) know precisely which fields/types are required
-// for each of the three client-rendered content block types.
+// This is also what gets downloaded as template.json.
+//
+// NOTE: SlideText.body is now an ORDERED array of nodes — either
+// { type: "paragraph", text } or { type: "image", src, alt, caption? } —
+// instead of a flat body[] string array plus a separate images[] array.
+// This lets an image be placed after a specific paragraph instead of
+// always being grouped at the end.
 export const BULK_IMPORT_TEMPLATE: BulkImportPayload & { $schemaNotes: Record<string, string> } = {
   $schemaNotes: {
     course: "One course per import. slug must be lowercase-kebab-case and unique.",
     "topics[].slug": "Must be lowercase-kebab-case and unique within the course.",
     "subtopics[].content_json":
-      "Ordered array of content blocks rendered top-to-bottom by the student UI. Each block's `type` must be exactly 'SlideText', 'VisualMockup', or 'FlowDiagram'.",
+      "Ordered array of content blocks rendered top-to-bottom. Each block's `type` must be exactly 'SlideText', 'VisualMockup', or 'FlowDiagram'.",
     "subtopics[].quiz":
-      "Optional. If present, questions_json must have 2-6 options per question and correctIndex must point at a valid option.",
+      "Optional. If present, questions_json must have 2-6 options per question and correctIndex must point at a valid option. Option order is shuffled automatically on save and again per student attempt — author them in any order.",
     SlideText:
-      "body is an array of paragraph strings; wrap words in **double asterisks** for bold, matching the student renderer. images is optional.",
+      "body is an ORDERED array of nodes: { type: 'paragraph', text } or { type: 'image', src, alt, caption? }. Place an image node between two paragraph nodes to position it exactly where it should appear. Use **double asterisks** in paragraph text for bold.",
     VisualMockup: "mockupType must be one of: browser | form | menu | dialog. elements[].kind must be one of: input | button | text | panel.",
     FlowDiagram: "steps is an ordered array of { label, description? } rendered as a horizontal/vertical flow.",
   },
@@ -36,19 +40,18 @@ export const BULK_IMPORT_TEMPLATE: BulkImportPayload & { $schemaNotes: Record<st
           content_json: [
             {
               type: "SlideText",
-              heading: "Optional heading shown above the paragraphs",
+              heading: "Optional heading shown above the content",
               body: [
-                "First paragraph. Use **bold** for key terms.",
-                "Second paragraph continues the explanation.",
-              ],
-              proTip: "Optional single-sentence tip shown in a highlighted callout box.",
-              images: [
+                { type: "paragraph", text: "First paragraph. Use **bold** for key terms." },
                 {
+                  type: "image",
                   src: "https://<project>.supabase.co/storage/v1/object/public/course-assets/uploads/example.png",
                   alt: "Descriptive alt text for accessibility",
-                  caption: "Optional caption shown under the thumbnail and in the lightbox",
+                  caption: "Optional caption — this image appears right here, between the two paragraphs.",
                 },
+                { type: "paragraph", text: "Second paragraph continues the explanation, after the image." },
               ],
+              proTip: "Optional single-sentence tip shown in a highlighted callout box.",
             },
             {
               type: "VisualMockup",

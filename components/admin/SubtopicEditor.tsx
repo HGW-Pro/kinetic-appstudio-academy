@@ -8,20 +8,13 @@ import {
   deleteSubtopic,
   upsertQuiz,
 } from "../../lib/admin/actions";
-import type { SubtopicRecord, QuizRecord } from "../../lib/admin/types";
-import ImageUploader from "./ImageUploader";
+import type { SubtopicRecord, QuizRecord, ContentBlock, QuizQuestionSchema } from "../../lib/admin/types";
+import ContentBlockEditor from "./ContentBlockEditor";
+import QuizQuestionEditor from "./QuizQuestionEditor";
 import { useToast } from "./ToastProvider";
 
-const DEFAULT_CONTENT = JSON.stringify(
-  [{ type: "SlideText", body: ["First paragraph."] }],
-  null,
-  2
-);
-const DEFAULT_QUIZ = JSON.stringify(
-  [{ question: "Example question?", options: ["A", "B"], correctIndex: 0, explanation: "Because A." }],
-  null,
-  2
-);
+const DEFAULT_CONTENT: ContentBlock[] = [{ type: "SlideText", body: [{ type: "paragraph", text: "" }] }];
+const DEFAULT_QUIZ: QuizQuestionSchema[] = [];
 
 export default function SubtopicEditor({
   topicId,
@@ -36,43 +29,36 @@ export default function SubtopicEditor({
   quiz?: QuizRecord;
   onDone?: () => void;
 }) {
-  const [contentJson, setContentJson] = useState(
-    subtopic ? JSON.stringify(subtopic.content_json, null, 2) : DEFAULT_CONTENT
-  );
-  const [questionsJson, setQuestionsJson] = useState(
-    quiz ? JSON.stringify(quiz.questions_json, null, 2) : DEFAULT_QUIZ
-  );
-  const [jsonError, setJsonError] = useState<string | null>(null);
+  const [title, setTitle] = useState(subtopic?.title ?? "");
+  const [sequenceOrder, setSequenceOrder] = useState(subtopic?.sequence_order ?? 0);
+  const [blocks, setBlocks] = useState<ContentBlock[]>(subtopic?.content_json ?? DEFAULT_CONTENT);
+  const [questions, setQuestions] = useState<QuizQuestionSchema[]>(quiz?.questions_json ?? DEFAULT_QUIZ);
+  const [showRawJson, setShowRawJson] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [quizError, setQuizError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [savingQuiz, setSavingQuiz] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [lastUploadedUrl, setLastUploadedUrl] = useState<string | null>(null);
   const router = useRouter();
   const { show } = useToast();
   const isEdit = !!subtopic;
 
-  function validateJsonLocally(text: string): string | null {
-    try {
-      const parsed = JSON.parse(text);
-      if (!Array.isArray(parsed) || parsed.length === 0) return "Must be a non-empty JSON array.";
-      return null;
-    } catch (err) {
-      return `Invalid JSON: ${(err as Error).message}`;
-    }
-  }
-
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const localError = validateJsonLocally(contentJson);
-    if (localError) {
-      setJsonError(localError);
+    setFormError(null);
+    if (!title.trim()) {
+      setFormError("Title is required.");
       return;
     }
-    setJsonError(null);
+    if (blocks.length === 0) {
+      setFormError("Add at least one content block.");
+      return;
+    }
     setSubmitting(true);
-    const formData = new FormData(e.currentTarget);
-    formData.set("content_json", contentJson);
+    const formData = new FormData();
+    formData.set("title", title);
+    formData.set("sequence_order", String(sequenceOrder));
+    formData.set("content_json", JSON.stringify(blocks));
 
     const result = isEdit
       ? await updateSubtopic(subtopic!.id, topicId, courseId, formData)
@@ -81,7 +67,7 @@ export default function SubtopicEditor({
 
     if (!result.ok) {
       show(result.error ?? "Something went wrong.", "error");
-      setJsonError(result.error ?? null);
+      setFormError(result.error ?? null);
       return;
     }
     show(isEdit ? "Subtopic updated." : "Subtopic created.", "success");
@@ -94,15 +80,28 @@ export default function SubtopicEditor({
       show("Save the subtopic before adding a quiz.", "error");
       return;
     }
-    const localError = validateJsonLocally(questionsJson);
-    if (localError) {
-      setQuizError(localError);
+    if (questions.length === 0) {
+      setQuizError("Add at least one question.");
       return;
+    }
+    for (const q of questions) {
+      if (!q.question.trim()) {
+        setQuizError("Every question needs question text.");
+        return;
+      }
+      if (q.options.some((o) => !o.trim())) {
+        setQuizError("Every option needs text — remove empty options.");
+        return;
+      }
+      if (!q.explanation.trim()) {
+        setQuizError("Every question needs an explanation.");
+        return;
+      }
     }
     setQuizError(null);
     setSavingQuiz(true);
     const formData = new FormData();
-    formData.set("questions_json", questionsJson);
+    formData.set("questions_json", JSON.stringify(questions));
     const result = await upsertQuiz(subtopic.id, courseId, formData);
     setSavingQuiz(false);
     if (!result.ok) {
@@ -110,7 +109,7 @@ export default function SubtopicEditor({
       setQuizError(result.error ?? null);
       return;
     }
-    show("Quiz saved.", "success");
+    show("Quiz saved. Answer order will be shuffled for every student automatically.", "success");
     router.refresh();
   }
 
@@ -128,20 +127,15 @@ export default function SubtopicEditor({
     router.refresh();
   }
 
-  function insertImageSnippet(url: string) {
-    setLastUploadedUrl(url);
-    show("Image URL ready — paste it into an images[] block below.", "info");
-  }
-
   return (
     <div className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
-      <form onSubmit={handleSubmit} className="space-y-3">
+      <form onSubmit={handleSubmit} className="space-y-4">
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="sm:col-span-2">
             <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Title</label>
             <input
-              name="title"
-              defaultValue={subtopic?.title}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               required
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
             />
@@ -150,36 +144,33 @@ export default function SubtopicEditor({
             <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Order</label>
             <input
               type="number"
-              name="sequence_order"
-              defaultValue={subtopic?.sequence_order ?? 0}
+              value={sequenceOrder}
+              onChange={(e) => setSequenceOrder(Number(e.target.value))}
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
             />
           </div>
         </div>
 
-        <ImageUploader label="Upload an image to reference in content_json" pathPrefix="subtopics" onUploaded={insertImageSnippet} />
-        {lastUploadedUrl && (
-          <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-            Last uploaded URL:{" "}
-            <code className="break-all rounded bg-slate-200 px-1 py-0.5">{lastUploadedUrl}</code>
-          </div>
-        )}
-
         <div>
-          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
-            content_json (array of SlideText / VisualMockup / FlowDiagram blocks)
-          </label>
-          <textarea
-            value={contentJson}
-            onChange={(e) => {
-              setContentJson(e.target.value);
-              setJsonError(null);
-            }}
-            rows={12}
-            className="mt-1 w-full rounded-md border border-slate-300 bg-slate-50 p-3 font-mono text-xs text-slate-800 focus:border-slate-500 focus:outline-none"
-          />
-          {jsonError && <p className="mt-1 text-xs text-red-600">⚠️ {jsonError}</p>}
+          <div className="mb-2 flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wide text-slate-500">Content</label>
+            <button
+              type="button"
+              onClick={() => setShowRawJson((s) => !s)}
+              className="text-[11px] font-semibold text-slate-400 hover:text-slate-600"
+            >
+              {showRawJson ? "Hide" : "View"} raw JSON
+            </button>
+          </div>
+          <ContentBlockEditor value={blocks} onChange={setBlocks} />
+          {showRawJson && (
+            <pre className="mt-3 max-h-64 overflow-auto rounded-md border border-slate-200 bg-slate-900 p-3 text-[11px] text-slate-100">
+              {JSON.stringify(blocks, null, 2)}
+            </pre>
+          )}
         </div>
+
+        {formError && <p className="text-xs text-red-600">⚠️ {formError}</p>}
 
         <div className="flex gap-2">
           <button
@@ -204,24 +195,16 @@ export default function SubtopicEditor({
 
       {isEdit && (
         <div className="border-t border-slate-200 pt-4">
-          <label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Quiz — questions_json (2-6 options per question)
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Quiz
           </label>
-          <textarea
-            value={questionsJson}
-            onChange={(e) => {
-              setQuestionsJson(e.target.value);
-              setQuizError(null);
-            }}
-            rows={8}
-            className="mt-1 w-full rounded-md border border-slate-300 bg-slate-50 p-3 font-mono text-xs text-slate-800 focus:border-slate-500 focus:outline-none"
-          />
-          {quizError && <p className="mt-1 text-xs text-red-600">⚠️ {quizError}</p>}
+          <QuizQuestionEditor value={questions} onChange={setQuestions} />
+          {quizError && <p className="mt-2 text-xs text-red-600">⚠️ {quizError}</p>}
           <button
             type="button"
             onClick={handleSaveQuiz}
             disabled={savingQuiz}
-            className="mt-2 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
+            className="mt-3 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 transition hover:bg-slate-50 disabled:opacity-50"
           >
             {savingQuiz ? "Saving…" : "Save Quiz"}
           </button>

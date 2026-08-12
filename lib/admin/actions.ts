@@ -5,6 +5,8 @@ import { createSupabaseServerClient } from "../supabase/server";
 import { assertAdminOrThrow } from "./guard";
 import {
   validateBulkImportPayload,
+  shuffleBulkImportPayload,
+  shuffleQuestions,
   ValidationError,
   type ContentBlock,
   type QuizQuestionSchema,
@@ -354,9 +356,15 @@ export async function upsertQuiz(
       return { ok: false, error: "questions_json is not valid JSON." };
     }
 
+    // Shuffle each question's option order at save time, so the stored
+    // data itself never carries a predictable "correct answer is always
+    // position N" pattern, on top of QuizEngine also reshuffling per
+    // attempt on the student side.
+    const shuffled = shuffleQuestions(questions_json);
+
     const { error } = await supabase
       .from("quizzes")
-      .upsert({ subtopic_id: subtopicId, questions_json }, { onConflict: "subtopic_id" });
+      .upsert({ subtopic_id: subtopicId, questions_json: shuffled }, { onConflict: "subtopic_id" });
 
     if (error) return { ok: false, error: error.message };
 
@@ -382,8 +390,9 @@ export async function bulkImportCourse(rawJson: string): Promise<ActionResult<{ 
     }
 
     const payload = validateBulkImportPayload(parsed);
+    const shuffled = shuffleBulkImportPayload(payload);
 
-    const { data, error } = await supabase.rpc("admin_bulk_import_course", { payload });
+    const { data, error } = await supabase.rpc("admin_bulk_import_course", { payload: shuffled });
 
     if (error) {
       return { ok: false, error: `Import failed and was fully rolled back: ${error.message}` };
