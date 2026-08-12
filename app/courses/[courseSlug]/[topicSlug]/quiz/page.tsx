@@ -3,14 +3,14 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getCourse, getTopic } from "../../../../lib/courses";
-import QuizEngine from "../../../../components/QuizEngine";
-import TopicAccessGate from "../../../../components/TopicAccessGate";
-import { useAuth } from "../../../../components/AuthProvider";
-import { supabase } from "../../../../lib/supabaseClient";
-import { cmsModuleSlug } from "../../../../lib/cms/shared";
-import { loadRemoteProgress } from "../../../../lib/progress";
-import type { QuizQuestionSchema } from "../../../../lib/admin/types";
+import { getCourse, getTopic } from "../../../../../lib/courses";
+import QuizEngine from "../../../../../components/QuizEngine";
+import TopicAccessGate from "../../../../../components/TopicAccessGate";
+import { useAuth } from "../../../../../components/AuthProvider";
+import { supabase } from "../../../../../lib/supabaseClient";
+import { cmsModuleSlug } from "../../../../../lib/cms/shared";
+import { loadRemoteProgress } from "../../../../../lib/progress";
+import type { QuizQuestionSchema } from "../../../../../lib/admin/types";
 
 export default function TopicQuizPage({
   params,
