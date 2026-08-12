@@ -5,8 +5,8 @@ import {
   getPublicTopic,
   getPublicSubtopic,
   getPublicQuizForSubtopic,
-  cmsModuleSlug,
 } from "../../../../../../lib/cms/queries";
+import { cmsModuleSlug } from "../../../../../../lib/cms/shared";
 import CmsAccessGate from "../../../../../../components/cms/CmsAccessGate";
 import QuizEngine from "../../../../../../components/QuizEngine";
 
@@ -31,13 +31,20 @@ export default async function LibraryQuizPage({
 
   const moduleSlug = cmsModuleSlug(course.slug, topic.slug);
 
+  // QuizEngine (built for the legacy hardcoded curriculum) expects each
+  // question to carry a stable `id`. The CMS's QuizQuestionSchema has no
+  // such field, so synthesize a positional one here at the boundary
+  // rather than changing either QuizEngine's existing contract or the
+  // CMS schema — this keeps both sides untouched.
+  const questionsWithId = quiz.questions_json.map((q, i) => ({ ...q, id: `q${i}` }));
+
   return (
     <CmsAccessGate courseSlug={course.slug} courseTitle={course.title} topics={topics} topicSlug={topic.slug}>
       <div className="px-6 py-10">
         <QuizEngine
           moduleSlug={moduleSlug}
           moduleTitle={`${topic.title} — ${subtopic.title}`}
-          questions={quiz.questions_json}
+          questions={questionsWithId}
           nextHref={`/library/${course.slug}/${topic.slug}`}
         />
       </div>
