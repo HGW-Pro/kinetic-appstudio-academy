@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import type { ContentBlock, QuizQuestionSchema } from "../../lib/admin/types";
 import { normalizeContentBlocks } from "../../lib/admin/types";
 import { validateInteractiveUIBlock, validateTrainingBlock, type DebuggingChallengeBlock, type TrainingContentBlock } from "../../lib/training-schema";
@@ -9,6 +10,11 @@ import QuizEngine from "../QuizEngine";
 import ChallengePanel from "../learning/ChallengePanel";
 import LessonSection, { type LearningMode } from "../learning/LessonSection";
 import PracticeExercise from "../learning/PracticeExercise";
+
+const KineticSimulator = dynamic(() => import("../simulator/KineticSimulator"), {
+  ssr: false,
+  loading: () => <div className="border border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm text-[var(--text-mid)]">Loading the Kinetic simulator…</div>,
+});
 
 function renderBold(text: string) {
   const parts = text.split(/\*\*(.*?)\*\*/g);
@@ -52,7 +58,7 @@ function explicitMode(value: unknown): LearningMode | null {
 function inferMode(raw: RawBlock): LearningMode {
   const declared = explicitMode(raw.learningMode) ?? explicitMode(raw.mode);
   if (declared) return declared;
-  if (raw.type === "DebuggingChallenge") return "Challenge";
+  if (raw.type === "DebuggingChallenge" || raw.type === "SimulatorChallenge") return "Challenge";
   if (raw.type === "PracticeExercise") return "Practice";
   if (raw.type === "InteractiveUI") return "Explore";
   if (raw.type === "Quiz") return "Knowledge Check";
@@ -99,7 +105,7 @@ function DebuggingChallenge({ block }: { block: DebuggingChallengeBlock }) {
   );
 }
 
-function ExperienceBlockRenderer({ block }: { block: Exclude<TrainingContentBlock, { type: "InteractiveUI" | "SlideText" | "VisualMockup" | "FlowDiagram" }> }) {
+function ExperienceBlockRenderer({ block }: { block: Exclude<TrainingContentBlock, { type: "InteractiveUI" | "SlideText" | "VisualMockup" | "FlowDiagram" | "SimulatorChallenge" }> }) {
   if (block.type === "Callout") {
     const tones = { info: "border-[var(--primary)]/30 bg-[var(--primary)]/[0.05]", success: "border-[var(--success)]/30 bg-[var(--success-soft)]", neutral: "border-[var(--border)] bg-[var(--surface-2)]" };
     return <aside className={`border-l-4 px-4 py-3 text-sm leading-6 text-[var(--text-mid)] ${tones[block.tone ?? "info"]}`}><p className="font-semibold text-[var(--text-hi)]">{block.title ?? "Key point"}</p><p className="mt-1">{block.body}</p></aside>;
@@ -125,10 +131,18 @@ function renderBlock(raw: unknown, normalized: ContentBlock, index: number, quiz
     if (!quizContext || questions.length === 0) return <div key={index} className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm text-[var(--text-mid)]">This knowledge check is not available yet.</div>;
     return <QuizEngine key={index} moduleSlug={quizContext.moduleSlug} moduleTitle={quizContext.moduleTitle} label="Knowledge Check" questions={questions.map((question, questionIndex) => ({ ...question, id: `content-quiz-${index}-${questionIndex}` }))} nextHref={quizContext.nextHref} />;
   }
+  if (rawBlock.type === "SimulatorChallenge") {
+    try {
+      const block = validateTrainingBlock(raw, `content[${index}]`);
+      if (block.type === "SimulatorChallenge") return <KineticSimulator key={index} challenge={block} />;
+    } catch {
+      return <div key={index} className="rounded-lg border border-[var(--error)]/30 bg-[var(--error-soft)] p-4 text-sm text-[var(--error)]">This simulator challenge configuration is invalid.</div>;
+    }
+  }
   if (["Callout", "ProTip", "Warning", "StepSequence", "Comparison", "WhyThisMatters", "UsedLater", "PracticeExercise", "DebuggingChallenge"].includes(String(rawBlock.type))) {
     try {
       const block = validateTrainingBlock(raw, `content[${index}]`);
-      if (block.type !== "InteractiveUI" && block.type !== "SlideText" && block.type !== "VisualMockup" && block.type !== "FlowDiagram") return <ExperienceBlockRenderer key={index} block={block} />;
+      if (block.type !== "InteractiveUI" && block.type !== "SlideText" && block.type !== "VisualMockup" && block.type !== "FlowDiagram" && block.type !== "SimulatorChallenge") return <ExperienceBlockRenderer key={index} block={block} />;
     } catch {
       return <div key={index} className="rounded-lg border border-[var(--error)]/30 bg-[var(--error-soft)] p-4 text-sm text-[var(--error)]">This learning block configuration is invalid.</div>;
     }

@@ -10,10 +10,9 @@ import { z } from "zod";
 // lib/training-import.ts and any admin component importing from here
 // keeps working without modification.
 
-// 2.1 adds composable learning-experience blocks and expected actions for
-// guided interactions.  Documents declaring 2.0 (and documents with no
+// 2.2 adds simulator challenge definitions.  Documents declaring 2.0/2.1 (and documents with no
 // version) remain valid so already-imported CMS JSON is unaffected.
-export const TRAINING_SCHEMA_VERSION = "2.1" as const;
+export const TRAINING_SCHEMA_VERSION = "2.2" as const;
 
 export type InteractiveElementKind =
   | "input"
@@ -125,6 +124,38 @@ export interface DebuggingChallengeBlock {
   rootCause: string;
   nextStep?: string;
 }
+export type SimulatorComponentKind = "TextBox" | "NumericBox" | "ComboBox" | "CheckBox" | "DateTime" | "Grid" | "Button";
+export type SimulatorEventTrigger = "New" | "Click";
+export type SimulatorEventAction = "Row Update";
+export type SimulatorEventValue = "Today" | string;
+export interface SimulatorComponentRequirement {
+  component: SimulatorComponentKind;
+  label: string;
+  binding?: string;
+  required?: boolean;
+  checklistLabel?: string;
+}
+export interface SimulatorEventRequirement {
+  componentLabel: string;
+  trigger: SimulatorEventTrigger;
+  action: SimulatorEventAction;
+  field: string;
+  value: SimulatorEventValue;
+  checklistLabel?: string;
+}
+export interface SimulatorChallengeDefinition {
+  id: string;
+  title: string;
+  intro?: string;
+  businessRequirement?: string;
+  requiredComponents: SimulatorComponentRequirement[];
+  requiredEvent?: SimulatorEventRequirement;
+  hints?: string[];
+  solution?: string;
+}
+export interface SimulatorChallengeBlock extends SimulatorChallengeDefinition {
+  type: "SimulatorChallenge";
+}
 export type TrainingContentBlock =
   | SlideTextBlock
   | VisualMockupBlock
@@ -138,7 +169,8 @@ export type TrainingContentBlock =
   | WhyThisMattersBlock
   | UsedLaterBlock
   | PracticeExerciseBlock
-  | DebuggingChallengeBlock;
+  | DebuggingChallengeBlock
+  | SimulatorChallengeBlock;
 
 export class TrainingSchemaError extends Error {
   constructor(public readonly path: string, message: string) {
@@ -340,6 +372,33 @@ const DebuggingChallengeBlockSchema = z.object({
     ctx.addIssue({ code: z.ZodIssueCode.custom, message: "must be a valid index into options", path: ["correctIndex"] });
   }
 });
+const SimulatorComponentKindSchema = z.enum(["TextBox", "NumericBox", "ComboBox", "CheckBox", "DateTime", "Grid", "Button"]);
+const SimulatorComponentRequirementSchema = z.object({
+  component: SimulatorComponentKindSchema,
+  label: nonEmptyString,
+  binding: z.string().optional(),
+  required: z.boolean().optional(),
+  checklistLabel: z.string().optional(),
+});
+const SimulatorEventRequirementSchema = z.object({
+  componentLabel: nonEmptyString,
+  trigger: z.enum(["New", "Click"]),
+  action: z.literal("Row Update"),
+  field: nonEmptyString,
+  value: nonEmptyString,
+  checklistLabel: z.string().optional(),
+});
+const SimulatorChallengeBlockSchema = z.object({
+  type: z.literal("SimulatorChallenge"),
+  id: nonEmptyString,
+  title: nonEmptyString,
+  intro: z.string().optional(),
+  businessRequirement: z.string().optional(),
+  requiredComponents: z.array(SimulatorComponentRequirementSchema).min(1, "must include at least one component requirement"),
+  requiredEvent: SimulatorEventRequirementSchema.optional(),
+  hints: z.array(nonEmptyString).optional(),
+  solution: z.string().optional(),
+});
 
 const TrainingContentBlockSchema = z.union([
   SlideTextBlockSchema,
@@ -355,11 +414,12 @@ const TrainingContentBlockSchema = z.union([
   UsedLaterBlockSchema,
   PracticeExerciseBlockSchema,
   DebuggingChallengeBlockSchema,
+  SimulatorChallengeBlockSchema,
 ]);
 
 const TrainingDocumentSchema = z.object({
   schemaVersion: z
-    .enum(["2.0", "2.1"], { errorMap: () => ({ message: "must be 2.0 or 2.1 when provided" }) })
+    .enum(["2.0", "2.1", "2.2"], { errorMap: () => ({ message: "must be 2.0, 2.1, or 2.2 when provided" }) })
     .optional(),
   courses: z.array(z.unknown()).min(1, "must be a non-empty array"),
 });

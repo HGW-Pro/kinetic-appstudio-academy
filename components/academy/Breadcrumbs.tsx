@@ -7,6 +7,7 @@ const firstSegmentLabel: Record<string, string> = {
   dashboard: "Home",
   "learning-path": "Learning Path",
   courses: "Courses",
+  challenges: "Challenges",
   labs: "Labs",
 };
 

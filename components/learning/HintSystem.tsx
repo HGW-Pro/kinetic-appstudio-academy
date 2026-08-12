@@ -6,12 +6,14 @@ type HintSystemProps = {
   hints?: string[];
   solution?: string;
   solutionLabel?: string;
+  onShowSolution?: () => void;
 };
 
 export default function HintSystem({
   hints = [],
   solution,
   solutionLabel = "Show solution",
+  onShowSolution,
 }: HintSystemProps) {
   const [revealedHints, setRevealedHints] = useState(0);
   const [showSolution, setShowSolution] = useState(false);
@@ -47,7 +49,11 @@ export default function HintSystem({
         {canShowSolution && solution && (
           <button
             type="button"
-            onClick={() => setShowSolution((visible) => !visible)}
+            onClick={() => setShowSolution((visible) => {
+              const next = !visible;
+              if (next) onShowSolution?.();
+              return next;
+            })}
             className="rounded-md border border-[var(--primary)]/30 bg-[var(--primary)]/[0.05] px-3 py-2 text-sm font-semibold text-[var(--primary)] hover:bg-[var(--primary)]/[0.1]"
             aria-expanded={showSolution}
           >

@@ -157,11 +157,11 @@ export default function CmsDashboardClient({ courses }: DashboardProps) {
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[var(--accent)]">Practice</p>
           <h2 id="challenge-heading" className="mt-1 text-lg font-semibold text-[var(--text-hi)]">Today&apos;s challenge</h2>
           <p className="mt-2 text-sm leading-6 text-[var(--text-mid)]">
-            Practical challenges are being prepared for this learning path.
+            Build a Customer Entry Panel and configure an order-date default in a guided Application Studio simulation.
           </p>
-          <span className="mt-4 inline-flex rounded-full border border-[var(--border)] px-3 py-1 text-xs font-semibold text-[var(--text-lo)]">
-            Coming soon
-          </span>
+          <Link href="/challenges" className="mt-4 inline-flex min-h-10 items-center text-sm font-semibold text-[var(--primary)] hover:text-[var(--primary-dark)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--primary)]">
+            Start challenge <span aria-hidden="true" className="ml-2">→</span>
+          </Link>
         </section>
       </div>
 

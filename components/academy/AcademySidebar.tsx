@@ -11,7 +11,7 @@ const navigation: { label: string; href?: string; icon: IconName; comingSoon?: b
   { label: "Home", href: "/dashboard", icon: "home" },
   { label: "Learning Path", href: "/learning-path", icon: "path" },
   { label: "Courses", href: "/courses", icon: "courses" },
-  { label: "Challenges", icon: "challenge", comingSoon: true },
+  { label: "Challenges", href: "/challenges", icon: "challenge" },
   { label: "Labs", href: "/labs", icon: "labs" },
   { label: "Glossary", icon: "glossary", comingSoon: true },
   { label: "Progress", href: "/dashboard", icon: "progress" },

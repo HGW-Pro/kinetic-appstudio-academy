@@ -7,7 +7,7 @@ const links = [
   { href: "/dashboard", label: "Home", icon: "⌂" },
   { href: "/learning-path", label: "Path", icon: "⌁" },
   { href: "/courses", label: "Courses", icon: "▤" },
-  { href: "/labs", label: "Labs", icon: "⌁" },
+  { href: "/challenges", label: "Challenges", icon: "⊞" },
 ];
 
 export default function MobileAcademyNav() {
