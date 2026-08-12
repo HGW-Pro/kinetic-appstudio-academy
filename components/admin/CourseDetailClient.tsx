@@ -5,6 +5,37 @@ import type { TopicRecord, SubtopicRecord, QuizRecord } from "../../lib/admin/ty
 import TopicForm from "./TopicForm";
 import SubtopicEditor from "./SubtopicEditor";
 
+// Two-level "list first, click to edit" navigation:
+//   1. Topics render as a flat list (title + subtopic count). Nothing is
+//      auto-expanded. Clicking a topic opens ONLY that topic's detail
+//      panel (its edit form + its subtopics list).
+//   2. Inside an open topic, subtopics are themselves a flat list first.
+//      Clicking a subtopic opens ONLY that subtopic's full editor.
+// This replaces the previous behavior where the first topic auto-expanded
+// on load and every one of its subtopics rendered as a fully-open editor
+// simultaneously.
+
+function SubtopicRow({
+  subtopic,
+  isOpen,
+  onToggle,
+}: {
+  subtopic: SubtopicRecord;
+  isOpen: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex w-full items-center justify-between rounded-md border border-slate-200 bg-white px-3 py-2 text-left text-sm transition hover:border-slate-400"
+    >
+      <span className="font-medium text-slate-800">{subtopic.title}</span>
+      <span className={`text-slate-400 transition ${isOpen ? "rotate-90" : ""}`}>›</span>
+    </button>
+  );
+}
+
 export default function CourseDetailClient({
   courseId,
   topics,
@@ -16,22 +47,29 @@ export default function CourseDetailClient({
   subtopics: SubtopicRecord[];
   quizzes: QuizRecord[];
 }) {
-  const [expandedTopicId, setExpandedTopicId] = useState<string | null>(topics[0]?.id ?? null);
+  const [openTopicId, setOpenTopicId] = useState<string | null>(null);
+  const [openSubtopicId, setOpenSubtopicId] = useState<string | null>(null);
   const [addingSubtopicFor, setAddingSubtopicFor] = useState<string | null>(null);
   const [addingTopic, setAddingTopic] = useState(false);
 
   const quizBySubtopicId = new Map(quizzes.map((q) => [q.subtopic_id, q]));
 
+  function toggleTopic(topicId: string) {
+    setOpenTopicId((cur) => (cur === topicId ? null : topicId));
+    setOpenSubtopicId(null);
+    setAddingSubtopicFor(null);
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       {topics.map((topic) => {
         const topicSubtopics = subtopics.filter((s) => s.topic_id === topic.id);
-        const isExpanded = expandedTopicId === topic.id;
+        const isTopicOpen = openTopicId === topic.id;
         return (
           <div key={topic.id} className="rounded-xl border border-slate-200 bg-white shadow-sm">
             <button
               type="button"
-              onClick={() => setExpandedTopicId(isExpanded ? null : topic.id)}
+              onClick={() => toggleTopic(topic.id)}
               className="flex w-full items-center justify-between px-4 py-3 text-left"
             >
               <div>
@@ -40,24 +78,37 @@ export default function CourseDetailClient({
                   /{topic.slug} · {topicSubtopics.length} subtopic{topicSubtopics.length === 1 ? "" : "s"}
                 </p>
               </div>
-              <span className={`text-slate-400 transition ${isExpanded ? "rotate-90" : ""}`}>›</span>
+              <span className={`text-slate-400 transition ${isTopicOpen ? "rotate-90" : ""}`}>›</span>
             </button>
 
-            {isExpanded && (
+            {isTopicOpen && (
               <div className="space-y-4 border-t border-slate-200 p-4">
                 <TopicForm courseId={courseId} topic={topic} />
 
-                <div className="space-y-3 pl-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Subtopics</h3>
-                  {topicSubtopics.map((sub) => (
-                    <SubtopicEditor
-                      key={sub.id}
-                      topicId={topic.id}
-                      courseId={courseId}
-                      subtopic={sub}
-                      quiz={quizBySubtopicId.get(sub.id)}
-                    />
-                  ))}
+                <div className="space-y-2 pl-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Subtopics — click one to edit
+                  </h3>
+
+                  {topicSubtopics.map((sub) =>
+                    openSubtopicId === sub.id ? (
+                      <SubtopicEditor
+                        key={sub.id}
+                        topicId={topic.id}
+                        courseId={courseId}
+                        subtopic={sub}
+                        quiz={quizBySubtopicId.get(sub.id)}
+                        onDone={() => setOpenSubtopicId(null)}
+                      />
+                    ) : (
+                      <SubtopicRow
+                        key={sub.id}
+                        subtopic={sub}
+                        isOpen={false}
+                        onToggle={() => setOpenSubtopicId(sub.id)}
+                      />
+                    )
+                  )}
 
                   {addingSubtopicFor === topic.id ? (
                     <SubtopicEditor

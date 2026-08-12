@@ -1,17 +1,39 @@
 // The exact JSON structure BulkImportForm validates pasted data against.
-// This is downloaded as template.json — designed to be self-explanatory
+// This is downloaded as template.json -- designed to be self-explanatory
 // enough to hand directly to an AI model as "generate JSON matching this
 // exact structure" and get back something that imports cleanly.
+//
+// HIERARCHY (as currently structured in this academy):
+//   Course (e.g. "Kinetic Application Studio")
+//     -> Topic / "Module" (e.g. "Application Studio Fundamentals") -- the
+//        words "topic" and "module" refer to the same thing in this schema.
+//        Multiple topics/modules can and normally do live under ONE course.
+//     -> Subtopic (a single lesson screen within a topic)
+//        -> optional Quiz (one quiz per subtopic)
+//
+// IMPORTANT -- WHAT BULK IMPORT DOES AND DOESN'T DO RIGHT NOW:
+//   Every course object in courses[] below ALWAYS creates a brand-new
+//   top-level course row. There is currently no way to bulk-import new
+//   topics/modules INTO an existing course (like adding another module
+//   under the existing "Kinetic Application Studio" course) via this
+//   JSON importer -- that capability needs a small database function
+//   this session didn't have access to add yet.
+//
+//   To add a new topic/module to an EXISTING course today, use the
+//   admin UI instead: open that course in /admin/courses, click
+//   "+ Add Topic", and add its subtopics one at a time (or paste
+//   content_json for a single subtopic using the friendly editor).
+//   Bulk import remains the right tool for creating an entirely NEW
+//   course with all its topics/subtopics/quizzes in one paste.
 //
 // KEY POINTS FOR WHOEVER (OR WHATEVER AI) IS GENERATING THIS JSON:
 //
 // 1. MULTIPLE COURSES AT ONCE: wrap everything in a top-level "courses"
-//    array. Each entry is one full course (its own topics/subtopics/
-//    quizzes). You can paste one giant JSON with 10 courses in it and
-//    they'll each be imported independently — if one has a mistake, the
-//    others still succeed and you'll get back a per-course report.
-//    (A single course object without the "courses" wrapper also still
-//    works, for convenience.)
+//    array. Each entry is one full NEW course (its own topics/subtopics/
+//    quizzes). Each course imports independently -- if one has a
+//    mistake, the others still succeed and you'll get back a per-course
+//    report. (A single course object without the "courses" wrapper also
+//    still works, for convenience.)
 //
 // 2. IMAGES BY FILENAME: for any "src" (in a SlideText image node) or
 //    course "image_url", you do NOT need a full URL. Just use the
@@ -24,37 +46,29 @@
 // 3. FLOW DIAGRAMS: use this for any step-by-step / sequential process
 //    (e.g. "Create -> Save Draft -> Publish", or "Login -> Home ->
 //    Select Company"). Each step is just a short label plus an optional
-//    one-sentence description. Steps render left-to-right (or stacked on
-//    mobile) as connected boxes. Keep labels to 2-5 words; put the detail
-//    in "description". Use 3-6 steps — more than that gets visually
-//    cramped.
+//    one-sentence description. Use 3-6 steps.
 //
-// 4. VISUAL MOCKUPS: use this to show a simplified schematic of a UI
-//    screen (a login form, a menu, a dialog) WITHOUT needing a real
-//    screenshot. mockupType picks the frame style; elements is the list
-//    of things inside it in top-to-bottom order. This is a lightweight
-//    illustration, not a pixel-accurate mockup — for anything that needs
-//    to look exactly like the real Kinetic UI, use a real screenshot via
-//    a SlideText image node instead, and save VisualMockup for
-//    conceptual/simplified illustrations.
+// 4. VISUAL MOCKUPS: use this for a simplified schematic of a UI screen
+//    WITHOUT needing a real screenshot. For anything that needs to look
+//    exactly like the real Kinetic UI, use a real screenshot via a
+//    SlideText image node instead.
 //
-// 5. QUIZ ANSWER ORDER DOESN'T MATTER: put the correct answer anywhere in
-//    the options array (correctIndex just has to point at it correctly).
-//    The system automatically shuffles option order both when you save
-//    and again for every student attempt, so there's no need to
-//    deliberately randomize position yourself.
+// 5. QUIZ ANSWER ORDER DOESN'T MATTER: correctIndex just has to point at
+//    the right option -- order is shuffled automatically at save time and
+//    again per student attempt.
 
 export const BULK_IMPORT_TEMPLATE = {
   $schemaNotes: {
-    "top-level": "Either { courses: [ ...one or more course objects... ] } to import many courses at once, or a single { course, topics } object (no wrapper) for just one.",
-    "course.slug / topics[].slug": "Must be lowercase-kebab-case (e.g. 'my-topic-1') and unique — course slugs unique overall, topic slugs unique within their course.",
+    "top-level": "Either { courses: [ ...one or more NEW course objects... ] }, or a single { course, topics } object (no wrapper) for just one NEW course. This always creates new course(s) -- see the note above about adding topics to an EXISTING course via the UI instead.",
+    "course.slug / topics[].slug": "Must be lowercase-kebab-case (e.g. 'my-topic-1') and unique -- course slugs unique overall, topic slugs unique within their course.",
+    "topics[] a.k.a. modules[]": "Each course normally contains several topics/modules, e.g. Kinetic Application Studio contains 'Application Studio Fundamentals', 'Data Rules & Events', etc. as separate topic entries in this array.",
     "images (course.image_url, and any SlideText body image node's src)":
-      "Either a bare filename/path already uploaded to the course-assets storage bucket (e.g. 'LoginScreen.png'), or a full https:// URL. Bare filenames are auto-resolved to the bucket's public URL at import time.",
+      "Either a bare filename/path already uploaded to the course-assets storage bucket (e.g. 'LoginScreen.png'), or a full https:// URL.",
     "SlideText.body":
-      "ORDERED array of nodes: { type: 'paragraph', text } or { type: 'image', src, alt, caption? }. Put an image node between two paragraph nodes to position it exactly where it should appear in the lesson. Use **double asterisks** in paragraph text for bold.",
-    VisualMockup: "A simplified schematic UI illustration (not a real screenshot). mockupType: browser | form | menu | dialog. elements[].kind: input | button | text | panel. Use for conceptual illustrations only.",
-    FlowDiagram: "A sequential step diagram (e.g. a workflow or process). steps is ordered; each step is { label (2-5 words), description? (one sentence) }. Use 3-6 steps.",
-    "quiz.questions_json": "2-6 options per question. correctIndex points at the correct option — order doesn't matter, it's shuffled automatically at save time and again per student attempt.",
+      "ORDERED array of nodes: { type: 'paragraph', text } or { type: 'image', src, alt, caption? }. Put an image node between two paragraph nodes to position it exactly where it should appear. Use **double asterisks** for bold.",
+    VisualMockup: "A simplified schematic UI illustration. mockupType: browser | form | menu | dialog. elements[].kind: input | button | text | panel.",
+    FlowDiagram: "A sequential step diagram. steps is ordered; each step is { label (2-5 words), description? (one sentence) }. Use 3-6 steps.",
+    "quiz.questions_json": "2-6 options per question. correctIndex points at the correct option -- order doesn't matter, it's shuffled automatically.",
   },
 
   courses: [
@@ -68,7 +82,7 @@ export const BULK_IMPORT_TEMPLATE = {
       },
       topics: [
         {
-          title: "Example Topic",
+          title: "Example Topic / Module",
           slug: "example-topic",
           sequence_order: 0,
           subtopics: [
@@ -123,20 +137,10 @@ export const BULK_IMPORT_TEMPLATE = {
             },
           ],
         },
-      ],
-    },
-    {
-      course: {
-        title: "A Second Example Course (shows multi-course import)",
-        slug: "second-example-course",
-        description: "Any number of course objects can go in the courses[] array — each imports independently.",
-        sequence_order: 1,
-      },
-      topics: [
         {
-          title: "Its First Topic",
-          slug: "its-first-topic",
-          sequence_order: 0,
+          title: "A Second Topic / Module In The Same Course",
+          slug: "second-topic-module",
+          sequence_order: 1,
           subtopics: [
             {
               title: "Its First Subtopic",
