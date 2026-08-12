@@ -5,6 +5,8 @@ import type { CourseRecord, TopicRecord, SubtopicRecord, QuizRecord } from "../.
 import CourseForm from "../../../../components/admin/CourseForm";
 import CourseDetailClient from "../../../../components/admin/CourseDetailClient";
 import RecoverMissingModulesButton from "../../../../components/admin/RecoverMissingModulesButton";
+import DeleteButton from "../../../../components/admin/DeleteButton";
+import { deleteCourseAction } from "../../../../lib/admin/delete-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -45,12 +47,20 @@ export default async function AdminCourseDetailPage({ params }: { params: { cour
 
   return (
     <div className="space-y-8">
-      <div>
-        <Link href="/admin/courses" className="text-sm text-slate-500 hover:text-slate-800">
-          ← All courses
-        </Link>
-        <h1 className="mt-1 text-2xl font-bold text-slate-900">{course.title}</h1>
-        <p className="text-sm text-slate-500">/{course.slug}</p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <Link href="/admin/courses" className="text-sm text-slate-500 hover:text-slate-800">
+            ← All courses
+          </Link>
+          <h1 className="mt-1 text-2xl font-bold text-slate-900">{course.title}</h1>
+          <p className="text-sm text-slate-500">/{course.slug}</p>
+        </div>
+        <DeleteButton
+          label="Delete Course"
+          confirmText={`Delete "${course.title}"? This permanently removes every topic, subtopic, and quiz in this course. This cannot be undone.`}
+          action={deleteCourseAction.bind(null, course.id)}
+          redirectTo="/admin/courses"
+        />
       </div>
 
       <section className="space-y-3">

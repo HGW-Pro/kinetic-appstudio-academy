@@ -26,12 +26,6 @@ async function assertAdmin() {
   return supabase;
 }
 
-function revalidateAll() {
-  revalidatePath("/admin/danger-zone");
-  revalidatePath("/admin/courses");
-  revalidatePath("/courses");
-}
-
 export interface DeleteResult {
   error: string | null;
 }
@@ -44,20 +38,27 @@ export async function deleteCourseAction(courseId: string): Promise<DeleteResult
     const supabase = await assertAdmin();
     const { error } = await supabase.from("courses").delete().eq("id", courseId);
     if (error) return { error: error.message };
-    revalidateAll();
+    revalidatePath("/admin/courses");
+    revalidatePath("/admin/danger-zone");
+    revalidatePath("/courses");
     return { error: null };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Delete failed." };
   }
 }
 
-// Deletes a topic. Cascades to its subtopics and their quizzes.
-export async function deleteTopicAction(topicId: string): Promise<DeleteResult> {
+// Deletes a topic. Cascades to its subtopics and their quizzes. courseId is
+// used only to revalidate the specific /admin/courses/[courseId] detail
+// page so the topic list updates instantly without a hard refresh.
+export async function deleteTopicAction(topicId: string, courseId: string): Promise<DeleteResult> {
   try {
     const supabase = await assertAdmin();
     const { error } = await supabase.from("topics").delete().eq("id", topicId);
     if (error) return { error: error.message };
-    revalidateAll();
+    revalidatePath(`/admin/courses/${courseId}`);
+    revalidatePath("/admin/courses");
+    revalidatePath("/admin/danger-zone");
+    revalidatePath("/courses");
     return { error: null };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Delete failed." };
@@ -65,13 +66,17 @@ export async function deleteTopicAction(topicId: string): Promise<DeleteResult> 
 }
 
 // Deletes a subtopic. Cascades to its linked quiz (subtopic_id is a unique
-// FK on quizzes, so at most one quiz row is removed).
-export async function deleteSubtopicAction(subtopicId: string): Promise<DeleteResult> {
+// FK on quizzes, so at most one quiz row is removed). courseId is used only
+// to revalidate the specific course detail page.
+export async function deleteSubtopicAction(subtopicId: string, courseId: string): Promise<DeleteResult> {
   try {
     const supabase = await assertAdmin();
     const { error } = await supabase.from("subtopics").delete().eq("id", subtopicId);
     if (error) return { error: error.message };
-    revalidateAll();
+    revalidatePath(`/admin/courses/${courseId}`);
+    revalidatePath("/admin/courses");
+    revalidatePath("/admin/danger-zone");
+    revalidatePath("/courses");
     return { error: null };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Delete failed." };
@@ -85,7 +90,9 @@ export async function deleteQuizAction(quizId: string): Promise<DeleteResult> {
     const supabase = await assertAdmin();
     const { error } = await supabase.from("quizzes").delete().eq("id", quizId);
     if (error) return { error: error.message };
-    revalidateAll();
+    revalidatePath("/admin/courses");
+    revalidatePath("/admin/danger-zone");
+    revalidatePath("/courses");
     return { error: null };
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Delete failed." };

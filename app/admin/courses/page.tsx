@@ -4,6 +4,8 @@ import type { CourseRecord } from "../../../lib/admin/types";
 import CourseForm from "../../../components/admin/CourseForm";
 import BulkImportForm from "../../../components/admin/BulkImportForm";
 import MigrationButton from "../../../components/admin/MigrationButton";
+import DeleteButton from "../../../components/admin/DeleteButton";
+import { deleteCourseAction } from "../../../lib/admin/delete-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -38,33 +40,42 @@ export default async function AdminCoursesPage() {
           </h2>
           <div className="space-y-2">
             {(courses ?? []).map((c) => (
-              <Link
+              <div
                 key={c.id}
-                href={`/admin/courses/${c.id}`}
-                className="flex items-center gap-4 rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm transition hover:border-slate-400"
+                className="flex items-center gap-3 rounded-lg border border-slate-200 bg-white p-3 text-sm shadow-sm transition hover:border-slate-400"
               >
-                {c.image_url ? (
-                  <img
-                    src={c.image_url}
-                    alt={c.title}
-                    className="h-14 w-14 shrink-0 rounded-md object-cover"
-                  />
-                ) : (
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-slate-100 text-lg text-slate-300">
-                    🖼️
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-slate-900">{c.title}</p>
-                  <p className="text-xs text-slate-500">/{c.slug}</p>
-                  {c.description ? (
-                    <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{c.description}</p>
+                <Link
+                  href={`/admin/courses/${c.id}`}
+                  className="flex min-w-0 flex-1 items-center gap-4"
+                >
+                  {c.image_url ? (
+                    <img
+                      src={c.image_url}
+                      alt={c.title}
+                      className="h-14 w-14 shrink-0 rounded-md object-cover"
+                    />
                   ) : (
-                    <p className="mt-0.5 text-xs italic text-slate-300">No description yet</p>
+                    <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md bg-slate-100 text-lg text-slate-300">
+                      🖼️
+                    </div>
                   )}
-                </div>
-                <span className="shrink-0 text-slate-400">→</span>
-              </Link>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-slate-900">{c.title}</p>
+                    <p className="text-xs text-slate-500">/{c.slug}</p>
+                    {c.description ? (
+                      <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{c.description}</p>
+                    ) : (
+                      <p className="mt-0.5 text-xs italic text-slate-300">No description yet</p>
+                    )}
+                  </div>
+                  <span className="shrink-0 text-slate-400">→</span>
+                </Link>
+                <DeleteButton
+                  label="Delete"
+                  confirmText={`Delete "${c.title}"? This permanently removes every topic, subtopic, and quiz in this course. This cannot be undone.`}
+                  action={deleteCourseAction.bind(null, c.id)}
+                />
+              </div>
             ))}
             {(!courses || courses.length === 0) && !error && (
               <p className="rounded-lg border border-dashed border-slate-300 px-4 py-6 text-center text-sm text-slate-400">
