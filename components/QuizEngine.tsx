@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import type { QuizQuestion } from "../lib/curriculum";
 import { recordQuizResult } from "../lib/progress";
 import { useAuth } from "./AuthProvider";
 import { playSound } from "../lib/sounds";
 import Confetti from "./Confetti";
+import { supabase } from "../lib/supabaseClient";
 
 // Fisher-Yates shuffle — returns a new array, does not mutate the input.
 function shuffle<T>(arr: T[]): T[] {
@@ -27,6 +28,95 @@ function shuffleQuestionOptions(questions: QuizQuestion[]): QuizQuestion[] {
     const correctIndex = order.indexOf(q.correctIndex);
     return { ...q, options, correctIndex };
   });
+}
+
+interface LockoutStatus {
+  locked: boolean;
+  lockedUntil: string | null;
+  failStreak: number;
+}
+
+function formatCountdown(msRemaining: number): string {
+  const totalSeconds = Math.max(0, Math.floor(msRemaining / 1000));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  return `${hours}h ${minutes}m ${seconds}s`;
+}
+
+// Reads the streak-lockout status computed server-side by the
+// my_quiz_lockout_status() Postgres function (SECURITY DEFINER, scoped to
+// auth.uid() so a user can only ever check their own status). 3 consecutive
+// fails on this moduleSlug's quiz -> locked for 24h from the 3rd failure.
+// The same rule is also enforced by a BEFORE INSERT trigger on
+// quiz_attempts, so this client-side check is a UX convenience layered on
+// top of a real server-side guarantee, not the only enforcement.
+function useQuizLockout(moduleSlug: string, userId: string | undefined, refreshKey: number) {
+  const [status, setStatus] = useState<LockoutStatus | null>(null);
+  const [checked, setChecked] = useState(false);
+
+  useEffect(() => {
+    if (!userId) {
+      setStatus({ locked: false, lockedUntil: null, failStreak: 0 });
+      setChecked(true);
+      return;
+    }
+    setChecked(false);
+    (async () => {
+      const { data, error } = await supabase.rpc("my_quiz_lockout_status", {
+        p_module_slug: moduleSlug,
+      });
+      if (error) {
+        console.error("quiz lockout check failed", error);
+        setStatus({ locked: false, lockedUntil: null, failStreak: 0 });
+      } else {
+        setStatus(data as LockoutStatus);
+      }
+      setChecked(true);
+    })();
+  }, [moduleSlug, userId, refreshKey]);
+
+  return { status, checked };
+}
+
+function LockoutScreen({ lockedUntil }: { lockedUntil: string }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const remainingMs = new Date(lockedUntil).getTime() - now;
+
+  if (remainingMs <= 0) {
+    return (
+      <div className="glass-card glow-border mx-auto max-w-xl rounded-2xl p-10 text-center">
+        <div className="text-5xl">🔓</div>
+        <h2 className="mt-4 text-xl font-bold text-[var(--text-hi)]">Lockout lifted</h2>
+        <p className="mt-2 text-sm text-[var(--text-mid)]">Refresh the page to try the quiz again.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="glass-card glow-border mx-auto max-w-xl rounded-2xl p-10 text-center">
+      <div className="text-5xl">🔒</div>
+      <h2 className="mt-4 text-xl font-bold text-[var(--text-hi)]">Quiz temporarily locked</h2>
+      <p className="mt-2 text-sm text-[var(--text-mid)]">
+        You've missed this quiz 3 times in a row. Take a break and review the subtopics — you can
+        try again in:
+      </p>
+      <p className="mt-4 rounded-lg bg-[var(--surface-2)] px-4 py-3 font-mono text-lg font-semibold text-[var(--primary)]">
+        {formatCountdown(remainingMs)}
+      </p>
+      <Link
+        href="/dashboard"
+        className="mt-6 inline-block rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
+      >
+        Back to Dashboard
+      </Link>
+    </div>
+  );
 }
 
 export default function QuizEngine({
@@ -57,6 +147,13 @@ export default function QuizEngine({
   const [celebrate, setCelebrate] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [lockoutRefresh, setLockoutRefresh] = useState(0);
+
+  const { status: lockoutStatus, checked: lockoutChecked } = useQuizLockout(
+    moduleSlug,
+    user?.id,
+    lockoutRefresh
+  );
 
   const q = shuffledQuestions[current];
   const isLast = current === shuffledQuestions.length - 1;
@@ -92,6 +189,10 @@ export default function QuizEngine({
         window.setTimeout(() => setCelebrate(false), 3200);
       }
       setFinished(true);
+      // Re-check lockout status after this attempt syncs -- if this was the
+      // 3rd consecutive fail, the retake button below will be replaced by
+      // the LockoutScreen on the next render once the RPC reflects it.
+      setLockoutRefresh((r) => r + 1);
       return;
     }
     playSound("click");
@@ -111,9 +212,17 @@ export default function QuizEngine({
     setSyncError(null);
   }
 
+  // Wait for the lockout check before rendering anything quiz-related, to
+  // avoid a flash of quiz content for a user who is actually locked out.
+  if (!lockoutChecked) return null;
+  if (lockoutStatus?.locked && lockoutStatus.lockedUntil) {
+    return <LockoutScreen lockedUntil={lockoutStatus.lockedUntil} />;
+  }
+
   if (finished) {
     const pct = Math.round((score / shuffledQuestions.length) * 100);
     const passed = pct >= 80;
+    const justLockedOut = !passed && lockoutStatus?.locked && lockoutStatus.lockedUntil;
     return (
       <>
         <Confetti fire={celebrate} />
@@ -132,6 +241,11 @@ export default function QuizEngine({
           {passed ? (
             <p className="mt-4 text-sm text-[var(--primary)]">
               🎉 You earned the badge for this topic. Keep the streak going!
+            </p>
+          ) : justLockedOut ? (
+            <p className="mt-4 text-sm text-[var(--error)]">
+              That's 3 misses in a row — this quiz is now locked for 24 hours. Review the
+              subtopics before your next attempt.
             </p>
           ) : (
             <p className="mt-4 text-sm text-[var(--text-mid)]">
@@ -153,27 +267,38 @@ export default function QuizEngine({
             </p>
           )}
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <button
-              onClick={retake}
-              className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
-            >
-              Retake Quiz
-            </button>
-            {nextHref && passed && (
+            {justLockedOut ? (
               <Link
-                href={nextHref}
-                onClick={() => playSound("unlock")}
+                href="/dashboard"
                 className="rounded-md bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
               >
-                Next Topic →
+                Back to Dashboard
               </Link>
+            ) : (
+              <>
+                <button
+                  onClick={retake}
+                  className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
+                >
+                  Retake Quiz
+                </button>
+                {nextHref && passed && (
+                  <Link
+                    href={nextHref}
+                    onClick={() => playSound("unlock")}
+                    className="rounded-md bg-[var(--primary)] px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
+                  >
+                    Next Topic →
+                  </Link>
+                )}
+                <Link
+                  href="/dashboard"
+                  className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
+                >
+                  Back to Dashboard
+                </Link>
+              </>
             )}
-            <Link
-              href="/dashboard"
-              className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
-            >
-              Back to Dashboard
-            </Link>
           </div>
         </div>
       </>
@@ -182,6 +307,12 @@ export default function QuizEngine({
 
   return (
     <div className="mx-auto max-w-xl space-y-6">
+      {lockoutStatus && lockoutStatus.failStreak > 0 && lockoutStatus.failStreak < 3 && (
+        <p className="rounded-md border border-[var(--error)]/30 bg-[var(--error-soft)] px-3 py-2 text-center text-xs text-[var(--error)]">
+          ⚠️ {lockoutStatus.failStreak} missed attempt{lockoutStatus.failStreak === 1 ? "" : "s"} in a row —{" "}
+          {3 - lockoutStatus.failStreak} more and this quiz locks for 24 hours.
+        </p>
+      )}
       <div className="flex items-center justify-between text-xs text-[var(--text-lo)]">
         <span>
           Question {current + 1} of {shuffledQuestions.length}
