@@ -3,18 +3,17 @@ import { createSupabaseServerClient } from "../supabase/server";
 import type { CourseRecord, TopicRecord, SubtopicRecord, QuizRecord } from "../admin/types";
 import { cmsModuleSlug } from "./shared";
 
-// Read-only fetchers for the PUBLIC student-facing side of the CMS
-// (courses/topics/subtopics/quizzes tables). All four tables have a
-// public SELECT RLS policy (see supabase/migrations), so these work for
-// signed-out visitors too -- only write actions (enrolling, completing a
-// lesson, submitting a quiz) require sign-in, enforced separately by
-// lib/progress.ts, exactly like the legacy /courses and /modules routes.
+// Read-only fetchers for the PUBLIC student-facing side of the CMS. Only
+// published courses (is_published = true) are ever returned to public
+// callers -- admin views bypass this by querying the tables directly via
+// createSupabaseServerClient() with the admin's own authenticated session.
 
 export async function getPublicCourses(): Promise<CourseRecord[]> {
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
     .from("courses")
     .select("*")
+    .eq("is_published", true)
     .order("sequence_order", { ascending: true })
     .returns<CourseRecord[]>();
   if (error) {
@@ -30,6 +29,7 @@ export async function getPublicCourse(courseSlug: string): Promise<CourseRecord 
     .from("courses")
     .select("*")
     .eq("slug", courseSlug)
+    .eq("is_published", true)
     .maybeSingle<CourseRecord>();
   if (error) {
     console.error("getPublicCourse failed", error);
@@ -128,8 +128,8 @@ export async function getPublicQuizzesForSubtopics(subtopicIds: string[]): Promi
   return map;
 }
 
-// Re-exported so any existing `import { cmsModuleSlug } from "../cms/queries"`
-// call site keeps working unchanged -- the actual implementation now lives
-// in ./shared (no "server-only"), so client components should import it
-// from there directly instead.
+// Alias matching the exact name requested for wiring into the main course
+// catalog page: getCmsCourses() === getPublicCourses().
+export const getCmsCourses = getPublicCourses;
+
 export { cmsModuleSlug };

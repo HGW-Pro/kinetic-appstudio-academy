@@ -50,6 +50,7 @@ export interface CourseRecord {
   description: string | null;
   image_url: string | null;
   sequence_order: number;
+  is_published: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -103,6 +104,7 @@ export interface BulkImportPayload {
     description?: string;
     image_url?: string;
     sequence_order?: number;
+    is_published?: boolean;
   };
   topics: BulkImportTopic[];
 }
@@ -264,6 +266,7 @@ export function validateBulkImportPayload(raw: unknown): BulkImportPayload {
     description: c.description !== undefined ? assertString(c.description, "course.description") : undefined,
     image_url: c.image_url !== undefined ? assertString(c.image_url, "course.image_url") : undefined,
     sequence_order: c.sequence_order !== undefined ? assertNumber(c.sequence_order, "course.sequence_order") : undefined,
+    is_published: c.is_published !== undefined ? Boolean(c.is_published) : undefined,
   };
 
   const topicsRaw = assertArray(r.topics ?? [], "topics");
@@ -529,14 +532,13 @@ export function normalizeContentBlocks(blocks: unknown): ContentBlock[] {
   });
 }
 
-// ---------- Append topics/modules into an EXISTING course ----------
-// Distinct from BulkImportPayload (which always creates a brand-new
-// course): this validates just an array of topics/modules meant to be
-// inserted into a course that already exists, identified by its slug.
-
 export interface AppendTopicsPayload {
   courseSlug: string;
   topics: BulkImportTopic[];
+}
+
+function validateBulkImportPayloadPrefixed2(raw: unknown, prefix: string): BulkImportPayload {
+  return validateBulkImportPayloadPrefixed(raw, prefix);
 }
 
 export function validateAppendTopicsPayload(raw: unknown): AppendTopicsPayload {

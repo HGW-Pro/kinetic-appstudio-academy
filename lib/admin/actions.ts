@@ -38,15 +38,14 @@ function actionError(err: unknown): ActionResult<never> {
   return { ok: false, error: "An unexpected error occurred." };
 }
 
-// ---------------- Shared reordering helper ----------------
-// Editing an item's "position" field previously just overwrote
-// sequence_order with the typed number verbatim -- setting a topic to
-// position 1 while another topic already held position 1 produced two
-// topics both at 1, instead of shifting the existing one down. This
-// computes a full re-sequenced order instead: remove the moved item from
-// its current slot, clamp the desired 0-based index to a valid range,
-// reinsert it there, and renumber every sibling in the same scope
-// sequentially -- the same semantics as reordering a normal list.
+function revalidateCourseSurfaces(courseId?: string) {
+  revalidatePath("/");
+  revalidatePath("/dashboard");
+  revalidatePath("/courses");
+  revalidatePath("/admin/courses");
+  if (courseId) revalidatePath(`/admin/courses/${courseId}`);
+}
+
 async function reorderEntities(
   supabase: ReturnType<typeof createSupabaseServerClient>,
   table: "courses" | "topics" | "subtopics",
@@ -85,6 +84,7 @@ export async function createCourse(formData: FormData): Promise<ActionResult<{ i
     const description = String(formData.get("description") ?? "").trim();
     const image_url = String(formData.get("image_url") ?? "").trim();
     const positionRaw = Number(formData.get("sequence_order") ?? 1);
+    const is_published = formData.get("is_published") !== "false";
     let slug = String(formData.get("slug") ?? "").trim();
 
     if (!title) return { ok: false, error: "Title is required." };
@@ -98,7 +98,14 @@ export async function createCourse(formData: FormData): Promise<ActionResult<{ i
 
     const { data, error } = await supabase
       .from("courses")
-      .insert({ title, slug, description: description || null, image_url: image_url || null, sequence_order: 999999 })
+      .insert({
+        title,
+        slug,
+        description: description || null,
+        image_url: image_url || null,
+        sequence_order: 999999,
+        is_published,
+      })
       .select("id")
       .single();
 
@@ -110,8 +117,7 @@ export async function createCourse(formData: FormData): Promise<ActionResult<{ i
     const { error: reorderErr } = await reorderEntities(supabase, "courses", null, null, data.id, positionRaw - 1);
     if (reorderErr) return { ok: false, error: reorderErr };
 
-    revalidatePath("/admin/courses");
-    revalidatePath("/courses");
+    revalidateCourseSurfaces(data.id);
     return { ok: true, data: { id: data.id } };
   } catch (err) {
     return actionError(err);
@@ -127,6 +133,7 @@ export async function updateCourse(courseId: string, formData: FormData): Promis
     const description = String(formData.get("description") ?? "").trim();
     const image_url = String(formData.get("image_url") ?? "").trim();
     const positionRaw = Number(formData.get("sequence_order") ?? 1);
+    const is_published = formData.get("is_published") !== "false";
     const slug = String(formData.get("slug") ?? "").trim();
 
     if (!title) return { ok: false, error: "Title is required." };
@@ -139,7 +146,13 @@ export async function updateCourse(courseId: string, formData: FormData): Promis
 
     const { error } = await supabase
       .from("courses")
-      .update({ title, slug, description: description || null, image_url: image_url || null })
+      .update({
+        title,
+        slug,
+        description: description || null,
+        image_url: image_url || null,
+        is_published,
+      })
       .eq("id", courseId);
 
     if (error) {
@@ -150,9 +163,7 @@ export async function updateCourse(courseId: string, formData: FormData): Promis
     const { error: reorderErr } = await reorderEntities(supabase, "courses", null, null, courseId, positionRaw - 1);
     if (reorderErr) return { ok: false, error: reorderErr };
 
-    revalidatePath("/admin/courses");
-    revalidatePath(`/admin/courses/${courseId}`);
-    revalidatePath("/courses");
+    revalidateCourseSurfaces(courseId);
     return { ok: true };
   } catch (err) {
     return actionError(err);
@@ -165,8 +176,7 @@ export async function deleteCourse(courseId: string): Promise<ActionResult> {
     const supabase = createSupabaseServerClient();
     const { error } = await supabase.from("courses").delete().eq("id", courseId);
     if (error) return { ok: false, error: error.message };
-    revalidatePath("/admin/courses");
-    revalidatePath("/courses");
+    revalidateCourseSurfaces();
     return { ok: true };
   } catch (err) {
     return actionError(err);
@@ -207,8 +217,7 @@ export async function createTopic(courseId: string, formData: FormData): Promise
     const { error: reorderErr } = await reorderEntities(supabase, "topics", "course_id", courseId, data.id, positionRaw - 1);
     if (reorderErr) return { ok: false, error: reorderErr };
 
-    revalidatePath(`/admin/courses/${courseId}`);
-    revalidatePath("/courses");
+    revalidateCourseSurfaces(courseId);
     return { ok: true, data: { id: data.id } };
   } catch (err) {
     return actionError(err);
@@ -242,8 +251,7 @@ export async function updateTopic(topicId: string, courseId: string, formData: F
     const { error: reorderErr } = await reorderEntities(supabase, "topics", "course_id", courseId, topicId, positionRaw - 1);
     if (reorderErr) return { ok: false, error: reorderErr };
 
-    revalidatePath(`/admin/courses/${courseId}`);
-    revalidatePath("/courses");
+    revalidateCourseSurfaces(courseId);
     return { ok: true };
   } catch (err) {
     return actionError(err);
@@ -256,8 +264,7 @@ export async function deleteTopic(topicId: string, courseId: string): Promise<Ac
     const supabase = createSupabaseServerClient();
     const { error } = await supabase.from("topics").delete().eq("id", topicId);
     if (error) return { ok: false, error: error.message };
-    revalidatePath(`/admin/courses/${courseId}`);
-    revalidatePath("/courses");
+    revalidateCourseSurfaces(courseId);
     return { ok: true };
   } catch (err) {
     return actionError(err);
@@ -306,8 +313,7 @@ export async function createSubtopic(
     const { error: reorderErr } = await reorderEntities(supabase, "subtopics", "topic_id", topicId, data.id, positionRaw - 1);
     if (reorderErr) return { ok: false, error: reorderErr };
 
-    revalidatePath(`/admin/courses/${courseId}`);
-    revalidatePath("/courses");
+    revalidateCourseSurfaces(courseId);
     return { ok: true, data: { id: data.id } };
   } catch (err) {
     return actionError(err);
@@ -351,8 +357,7 @@ export async function updateSubtopic(
     const { error: reorderErr } = await reorderEntities(supabase, "subtopics", "topic_id", topicId, subtopicId, positionRaw - 1);
     if (reorderErr) return { ok: false, error: reorderErr };
 
-    revalidatePath(`/admin/courses/${courseId}`);
-    revalidatePath("/courses");
+    revalidateCourseSurfaces(courseId);
     return { ok: true };
   } catch (err) {
     return actionError(err);
@@ -365,8 +370,7 @@ export async function deleteSubtopic(subtopicId: string, courseId: string): Prom
     const supabase = createSupabaseServerClient();
     const { error } = await supabase.from("subtopics").delete().eq("id", subtopicId);
     if (error) return { ok: false, error: error.message };
-    revalidatePath(`/admin/courses/${courseId}`);
-    revalidatePath("/courses");
+    revalidateCourseSurfaces(courseId);
     return { ok: true };
   } catch (err) {
     return actionError(err);
@@ -406,7 +410,7 @@ export async function upsertQuiz(
 
     if (error) return { ok: false, error: error.message };
 
-    revalidatePath(`/admin/courses/${courseId}`);
+    revalidateCourseSurfaces(courseId);
     return { ok: true };
   } catch (err) {
     return actionError(err);
@@ -436,8 +440,7 @@ export async function bulkImportCourse(rawJson: string): Promise<ActionResult<{ 
       return { ok: false, error: `Import failed and was fully rolled back: ${error.message}` };
     }
 
-    revalidatePath("/admin/courses");
-    revalidatePath("/courses");
+    revalidateCourseSurfaces(data as string);
     return { ok: true, data: { courseId: data as string } };
   } catch (err) {
     return actionError(err);
@@ -475,8 +478,7 @@ export async function bulkImportCourses(rawJson: string): Promise<
 
     const result = data as { imported: { title: string; id: string }[]; errors: { title: string; error: string }[] };
 
-    revalidatePath("/admin/courses");
-    revalidatePath("/courses");
+    revalidateCourseSurfaces();
 
     if (result.imported.length === 0) {
       return {
@@ -532,10 +534,7 @@ export async function appendTopicsToCourse(rawJson: string): Promise<
       errors: { title: string; error: string }[];
     };
 
-    revalidatePath("/admin/courses");
-    revalidatePath(`/admin/courses/${result.course_id}`);
-    revalidatePath("/courses");
-    revalidatePath("/library");
+    revalidateCourseSurfaces(result.course_id);
 
     if (result.imported.length === 0) {
       return {
@@ -676,8 +675,7 @@ export async function importMissingModulesIntoCourse(
       }
     }
 
-    revalidatePath("/admin/courses");
-    revalidatePath("/library");
+    revalidateCourseSurfaces(courseRow.id);
 
     return { ok: true, data: { imported, skipped, warnings } };
   } catch (err) {

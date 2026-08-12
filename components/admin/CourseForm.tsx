@@ -9,6 +9,7 @@ import { useToast } from "./ToastProvider";
 
 export default function CourseForm({ course }: { course?: CourseRecord }) {
   const [imageUrl, setImageUrl] = useState(course?.image_url ?? "");
+  const [isPublished, setIsPublished] = useState(course ? course.is_published !== false : true);
   const [submitting, setSubmitting] = useState(false);
   const router = useRouter();
   const { show } = useToast();
@@ -19,6 +20,7 @@ export default function CourseForm({ course }: { course?: CourseRecord }) {
     setSubmitting(true);
     const formData = new FormData(e.currentTarget);
     formData.set("image_url", imageUrl);
+    formData.set("is_published", isPublished ? "true" : "false");
 
     const result = isEdit ? await updateCourse(course!.id, formData) : await createCourse(formData);
     setSubmitting(false);
@@ -95,11 +97,20 @@ export default function CourseForm({ course }: { course?: CourseRecord }) {
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-slate-500 focus:outline-none"
           />
           <p className="mt-1 text-[11px] text-slate-400">
-            1 = first. Setting this shifts every other course to make room — it never creates a
-            duplicate position.
+            1 = first. Setting this shifts every other course to make room.
           </p>
         </div>
       </div>
+
+      <label className="flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+        <input
+          type="checkbox"
+          checked={isPublished}
+          onChange={(e) => setIsPublished(e.target.checked)}
+          className="h-4 w-4"
+        />
+        <span className="font-medium text-slate-700">Published (visible to students)</span>
+      </label>
 
       <button
         type="submit"
