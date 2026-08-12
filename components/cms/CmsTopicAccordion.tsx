@@ -1,79 +1,169 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuth } from "../AuthProvider";
 import { supabase } from "../../lib/supabaseClient";
 import { cmsModuleSlug } from "../../lib/cms/shared";
 import { loadLocalProgress, loadRemoteProgress, enrollInModule, type ProgressState } from "../../lib/progress";
-import { normalizeContentBlocks, type ContentBlock } from "../../lib/admin/types";
-import CmsContentRenderer from "./CmsContentRenderer";
+import TopicOverview from "../learning/TopicOverview";
 
-type Topic = { id: string; title: string; slug: string; sequence_order: number; difficulty: string | null };
-type Subtopic = { id: string; title: string; sequence_order: number; est_minutes: number | null; content_json: ContentBlock[] };
+type Course = { id: string; title: string; slug: string; description: string | null };
+type Topic = {
+  id: string;
+  title: string;
+  slug: string;
+  sequence_order: number;
+  difficulty: string | null;
+  est_minutes: number | null;
+  learning_objectives: unknown;
+  prerequisite_topic_id: string | null;
+};
+type Subtopic = { id: string; title: string; sequence_order: number; est_minutes: number | null; content_json: unknown };
 
+function hasChallengeBlock(content: unknown): boolean {
+  if (!Array.isArray(content)) return false;
+  return content.some((block) => {
+    if (!block || typeof block !== "object") return false;
+    const candidate = block as { type?: unknown; mode?: unknown };
+    return candidate.type === "Challenge" || candidate.mode === "Challenge";
+  });
+}
+
+// Kept at its original path for route compatibility. The old accordion UI has
+// been replaced by the focused TopicOverview composition below.
 export default function CmsTopicAccordion({ courseSlug, topicSlug }: { courseSlug: string; topicSlug: string }) {
+  const router = useRouter();
   const { user, loading: authLoading } = useAuth();
-  const [course, setCourse] = useState<{id:string; title:string; slug:string} | null>(null);
+  const [course, setCourse] = useState<Course | null>(null);
   const [topic, setTopic] = useState<Topic | null>(null);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [subtopics, setSubtopics] = useState<Subtopic[]>([]);
-  const [quizCount, setQuizCount] = useState(0);
   const [progress, setProgress] = useState<ProgressState>({});
   const [enrolled, setEnrolled] = useState(false);
-  const [openId, setOpenId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [continuing, setContinuing] = useState(false);
+  const [dataError, setDataError] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   const moduleSlug = course && topic ? cmsModuleSlug(course.slug, topic.slug) : "";
 
-  useEffect(() => { (async () => {
-    const { data: c } = await supabase.from("courses").select("id,title,slug").eq("slug", courseSlug).eq("is_published", true).maybeSingle();
-    if (!c) { setError("Course not found."); setReady(true); return; }
-    setCourse(c);
-    const { data: ts } = await supabase.from("topics").select("id,title,slug,sequence_order,difficulty").eq("course_id", c.id).order("sequence_order");
-    const t = (ts ?? []).find(x => x.slug === topicSlug);
-    if (!t) { setError("Topic not found."); setReady(true); return; }
-    setTopics(ts ?? []); setTopic(t);
-    const { data: ss } = await supabase.from("subtopics").select("id,title,sequence_order,est_minutes,content_json").eq("topic_id", t.id).order("sequence_order");
-    setSubtopics((ss ?? []) as Subtopic[]);
-    const ids = (ss ?? []).map(x=>x.id);
-    if (ids.length) { const {data:q} = await supabase.from("quizzes").select("questions_json").in("subtopic_id",ids); setQuizCount((q??[]).reduce((n,x)=>n+(Array.isArray(x.questions_json)?x.questions_json.length:0),0)); }
-    setReady(true);
-  })(); }, [courseSlug, topicSlug]);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setReady(false);
+      setDataError(null);
+      setActionError(null);
+      const { data: loadedCourse, error: courseError } = await supabase
+        .from("courses")
+        .select("id,title,slug,description")
+        .eq("slug", courseSlug)
+        .eq("is_published", true)
+        .maybeSingle<Course>();
+      if (cancelled) return;
+      if (courseError || !loadedCourse) {
+        setDataError("Course not found.");
+        setReady(true);
+        return;
+      }
+      setCourse(loadedCourse);
+      const { data: loadedTopics, error: topicError } = await supabase
+        .from("topics")
+        .select("id,title,slug,sequence_order,difficulty,est_minutes,learning_objectives,prerequisite_topic_id")
+        .eq("course_id", loadedCourse.id)
+        .order("sequence_order");
+      if (cancelled) return;
+      const selectedTopic = (loadedTopics ?? []).find((item) => item.slug === topicSlug) as Topic | undefined;
+      if (topicError || !selectedTopic) {
+        setDataError("Topic not found.");
+        setReady(true);
+        return;
+      }
+      setTopics((loadedTopics ?? []) as Topic[]);
+      setTopic(selectedTopic);
+      const { data: loadedSubtopics, error: subtopicError } = await supabase
+        .from("subtopics")
+        .select("id,title,sequence_order,est_minutes,content_json")
+        .eq("topic_id", selectedTopic.id)
+        .order("sequence_order");
+      if (cancelled) return;
+      if (subtopicError) setDataError("Lessons could not be loaded.");
+      setSubtopics((loadedSubtopics ?? []) as Subtopic[]);
+      setReady(true);
+    })();
+    return () => { cancelled = true; };
+  }, [courseSlug, topicSlug]);
 
-  useEffect(() => { if (!ready || !moduleSlug || authLoading) return; (async()=> { const p = user ? await loadRemoteProgress(user.id) : loadLocalProgress(); setProgress(p); setEnrolled(!!p[moduleSlug]?.enrolled); })(); }, [ready,moduleSlug,user,authLoading]);
+  useEffect(() => {
+    if (!ready || !moduleSlug || authLoading) return;
+    let cancelled = false;
+    (async () => {
+      const state = user ? await loadRemoteProgress(user.id) : loadLocalProgress();
+      if (cancelled) return;
+      setProgress(state);
+      setEnrolled(Boolean(state[moduleSlug]?.enrolled));
+    })();
+    return () => { cancelled = true; };
+  }, [ready, moduleSlug, user, authLoading]);
 
-  async function enroll() { if (!user) return; const {error:e}=await enrollInModule(user.id,moduleSlug); if(e) setError(e); else setEnrolled(true); }
+  const completedIds = progress[moduleSlug]?.lessonsCompleted ?? [];
+  const orderedLessons = useMemo(
+    () => subtopics.map((subtopic) => ({ id: subtopic.id, title: subtopic.title, estMinutes: subtopic.est_minutes && subtopic.est_minutes > 0 ? subtopic.est_minutes : 5 })),
+    [subtopics]
+  );
+  const firstIncomplete = orderedLessons.find((lesson) => !completedIds.includes(lesson.id)) ?? orderedLessons[orderedLessons.length - 1];
+  const prerequisiteName = topic?.prerequisite_topic_id ? topics.find((item) => item.id === topic.prerequisite_topic_id)?.title ?? "Required topic" : null;
+  const objectives = Array.isArray(topic?.learning_objectives)
+    ? topic.learning_objectives.filter((objective): objective is string => typeof objective === "string" && objective.trim().length > 0)
+    : [];
+  const displayObjectives = objectives.length > 0 ? objectives : orderedLessons.map((lesson) => lesson.title);
+  const challengeLesson = subtopics.find((subtopic) => hasChallengeBlock(subtopic.content_json));
 
-  if (!ready) return <div className="py-16 text-center text-sm text-[var(--text-lo)]">Loading topic…</div>;
-  if (error || !course || !topic) return <div className="rounded-xl border border-[var(--error)]/30 bg-[var(--error-soft)] p-5 text-[var(--error)]">⚠️ {error ?? "Topic unavailable."}</div>;
+  async function handleContinue() {
+    if (!user || !firstIncomplete || !topic) return;
+    setContinuing(true);
+    setActionError(null);
+    if (!enrolled) {
+      const { error: enrollError } = await enrollInModule(user.id, moduleSlug);
+      if (enrollError) {
+        setActionError(enrollError);
+        setContinuing(false);
+        return;
+      }
+      setEnrolled(true);
+    }
+    router.push(`/courses/${courseSlug}/${topicSlug}/${firstIncomplete.id}`);
+  }
 
-  const done = progress[moduleSlug]?.lessonsCompleted ?? [];
-  const highest = user ? Math.min(done.length, subtopics.length - 1) : 0;
-  const allDone = subtopics.length > 0 && done.length >= subtopics.length;
-  const certified = !!progress[moduleSlug]?.completedAt;
-  const mins = subtopics.reduce((n,s)=>n+(s.est_minutes && s.est_minutes>0?s.est_minutes:5),0);
-  const topicIndex = topics.findIndex(t=>t.id===topic.id);
+  if (!ready || authLoading) return <div className="py-16 text-center text-sm text-[var(--text-lo)]">Loading topic…</div>;
+  if (dataError || !course || !topic) return <div role="alert" className="rounded-xl border border-[var(--error)]/30 bg-[var(--error-soft)] p-5 text-[var(--error)]">{dataError ?? "Topic unavailable."}</div>;
 
-  return <div className="space-y-8">
-    <div className="glass-card glow-border rounded-2xl p-8">
-      <div className="flex flex-wrap items-center justify-between gap-3"><div className="flex items-center gap-3"><span className="text-4xl">📘</span><div><p className="text-xs font-semibold uppercase tracking-wide text-[var(--primary)]">Topic {topicIndex+1} of {topics.length} · {(topic.difficulty || "Standard").toUpperCase()}</p><h1 className="text-2xl font-bold text-[var(--text-hi)] sm:text-3xl">{topic.title}</h1></div></div>
-      {user ? <button onClick={enroll} disabled={enrolled} className={`rounded-md px-4 py-2 text-sm font-semibold ${enrolled?"bg-[var(--success-soft)] text-[var(--success)]":"bg-[var(--primary)] text-white"}`}>{enrolled?"Enrolled ✓":"Enroll in Topic"}</button> : <Link href="/login" className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--text-hi)]">Sign in to enroll</Link>}</div>
-      <div className="mt-5 flex flex-wrap gap-3 text-xs text-[var(--text-lo)]"><span className="badge-pill">{subtopics.length} subtopics</span><span className="badge-pill">{mins} min</span><span className="badge-pill">{quizCount}-question assignment</span>{certified&&<span className="badge-pill">🏆 Certified</span>}</div>
-    </div>
+  const topicMinutes = topic.est_minutes && topic.est_minutes > 0
+    ? topic.est_minutes
+    : orderedLessons.reduce((total, lesson) => total + lesson.estMinutes, 0);
 
-    <div className="relative">
-      <div className="pointer-events-none absolute bottom-6 left-[23px] top-6 hidden w-[3px] sm:block"><div className="h-full w-full rounded-full bg-[var(--surface-3)]" /></div>
-      <div className="space-y-5 sm:pl-14">
-      {subtopics.map((s,i)=>{ const isDone=done.includes(s.id); const locked=!enrolled || i>highest; const open=openId===s.id&&!locked; return <div key={s.id} className="relative">
-        <span className={`absolute -left-14 top-5 hidden h-12 w-12 items-center justify-center rounded-full border-2 text-sm font-bold sm:flex ${isDone?"border-[var(--primary-light)] bg-[var(--primary)] text-white":locked?"border-[var(--border-strong)] bg-[var(--surface)] text-[var(--text-lo)]":"border-[var(--primary)] bg-[var(--surface)] text-[var(--primary)]"}`}>{isDone?"✓":locked?"🔒":i+1}</span>
-        <div className={`glass-card overflow-hidden rounded-xl ${locked?"opacity-60":""} ${open?"glow-border":""}`}><button disabled={locked} onClick={()=>setOpenId(open?null:s.id)} className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left"><div><p className="font-semibold text-[var(--text-hi)]">{s.title}</p><p className="text-xs text-[var(--text-lo)]">{s.est_minutes&&s.est_minutes>0?s.est_minutes:5} min{locked?" · Enroll or complete previous subtopic to unlock":""}</p></div>{!locked&&<span className={`text-lg text-[var(--text-lo)] transition ${open?"rotate-90":""}`}>›</span>}</button>
-        {open&&<div className="border-t border-[var(--border)] px-6 py-5"><CmsContentRenderer blocks={normalizeContentBlocks(s.content_json)} /><Link href={`/courses/${courseSlug}/${topicSlug}/${s.id}`} className="mt-5 inline-block rounded-md bg-[var(--primary)] px-5 py-2 text-xs font-semibold text-white">Open focused reading view →</Link></div>}</div>
-      </div>; })}
-      </div>
-    </div>
-
-    <div className="glass-card rounded-2xl p-6 text-center"><h2 className="text-lg font-semibold text-[var(--text-hi)]">Ready to test your knowledge?</h2><p className="mt-1 text-sm text-[var(--text-mid)]">{allDone?`Score 80%+ on the ${quizCount}-question assignment to earn this topic's badge and unlock the next.`:"Finish every subtopic above first."}</p>{allDone&&quizCount>0?<Link href={`/courses/${courseSlug}/${topicSlug}/quiz`} className="mt-5 inline-block rounded-md bg-[var(--primary)] px-6 py-3 text-sm font-semibold text-white">Take the Assignment →</Link>:<span className="mt-5 inline-block rounded-md bg-[var(--surface-2)] px-6 py-3 text-sm text-[var(--text-lo)]">Locked</span>}</div>
-  </div>;
+  return (
+    <>
+      {actionError && <p role="alert" className="mb-5 rounded-lg border border-[var(--error)]/30 bg-[var(--error-soft)] px-4 py-3 text-sm text-[var(--error)]">{actionError}</p>}
+      <TopicOverview
+        courseSlug={course.slug}
+        courseTitle={course.title}
+        topicSlug={topic.slug}
+        title={topic.title}
+        description={course.description || `Build confidence through a focused sequence of ${orderedLessons.length} lessons.`}
+        difficulty={topic.difficulty?.trim() || "Standard"}
+        estMinutes={topicMinutes || Math.max(orderedLessons.length * 5, 5)}
+        prerequisiteName={prerequisiteName}
+        objectives={displayObjectives.length > 0 ? displayObjectives : ["Complete the lessons in this topic to build practical Kinetic fluency."]}
+        lessons={orderedLessons}
+        completedIds={completedIds}
+        isSignedIn={Boolean(user)}
+        isEnrolled={enrolled}
+        isCertified={Boolean(progress[moduleSlug]?.completedAt)}
+        onContinue={handleContinue}
+        isContinuing={continuing}
+        challenge={challengeLesson ? <><p className="text-xs font-semibold uppercase tracking-[0.13em] text-[var(--accent)]">Practical challenge</p><h2 className="mt-1 text-lg font-semibold text-[var(--text-hi)]">{challengeLesson.title}</h2><p className="mt-1 text-sm text-[var(--text-mid)]">Apply this topic&apos;s concepts in a hands-on challenge.</p></> : undefined}
+      />
+    </>
+  );
 }
