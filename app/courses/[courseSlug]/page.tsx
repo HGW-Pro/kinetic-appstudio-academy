@@ -31,6 +31,39 @@ interface CmsTopicWithStats {
   quizQuestionCount: number;
 }
 
+// Raw shape returned by the single nested/embedded Supabase query below --
+// PostgREST resolves the whole course -> topics -> subtopics -> quizzes
+// tree server-side in one round trip instead of four sequential ones.
+interface NestedQuizRow {
+  questions_json: unknown;
+}
+interface NestedSubtopicRow {
+  id: string;
+  quizzes: NestedQuizRow[] | NestedQuizRow | null;
+}
+interface NestedTopicRow {
+  id: string;
+  title: string;
+  slug: string;
+  sequence_order: number;
+  difficulty: string | null;
+  est_minutes: number | null;
+  subtopics: NestedSubtopicRow[] | null;
+}
+interface NestedCourseRow {
+  id: string;
+  title: string;
+  slug: string;
+  description: string | null;
+  image_url: string | null;
+  topics: NestedTopicRow[] | null;
+}
+
+function countQuizQuestions(quizzes: NestedQuizRow[] | NestedQuizRow | null): number {
+  const rows = Array.isArray(quizzes) ? quizzes : quizzes ? [quizzes] : [];
+  return rows.reduce((sum, q) => sum + (Array.isArray(q.questions_json) ? q.questions_json.length : 0), 0);
+}
+
 export default function CoursePage({ params }: { params: { courseSlug: string } }) {
   const legacyCourse = getCourse(params.courseSlug);
 
@@ -42,6 +75,8 @@ export default function CoursePage({ params }: { params: { courseSlug: string } 
   const [cmsCourse, setCmsCourse] = useState<CmsCourseRow | null>(null);
   const [cmsTopics, setCmsTopics] = useState<CmsTopicWithStats[]>([]);
 
+  // Progress load and CMS data load are independent -- both effects fire
+  // on mount and run concurrently already (neither awaits the other).
   useEffect(() => {
     if (authLoading) return;
     (async () => {
@@ -54,55 +89,47 @@ export default function CoursePage({ params }: { params: { courseSlug: string } 
   useEffect(() => {
     if (legacyCourse) return;
     (async () => {
+      // Single nested/embedded query: PostgREST resolves course, topics,
+      // subtopics, and quizzes in one HTTP round trip via foreign-table
+      // embedding, instead of four sequential awaited queries where each
+      // one needs IDs produced by the previous one (a genuine dependency
+      // chain that Promise.all cannot parallelize away -- collapsing the
+      // round trips themselves is the only real fix).
       const { data: course } = await supabase
         .from("courses")
-        .select("id, title, slug, description, image_url")
+        .select(
+          `id, title, slug, description, image_url,
+           topics (
+             id, title, slug, sequence_order, difficulty, est_minutes,
+             subtopics ( id, quizzes ( questions_json ) )
+           )`
+        )
         .eq("slug", params.courseSlug)
         .eq("is_published", true)
-        .maybeSingle();
+        .order("sequence_order", { foreignTable: "topics", ascending: true })
+        .maybeSingle<NestedCourseRow>();
+
       if (!course) {
         setCmsChecked(true);
         return;
       }
-      setCmsCourse(course);
+      setCmsCourse({
+        id: course.id,
+        title: course.title,
+        slug: course.slug,
+        description: course.description,
+        image_url: course.image_url,
+      });
 
-      const { data: topics } = await supabase
-        .from("topics")
-        .select("id, title, slug, sequence_order, difficulty, est_minutes")
-        .eq("course_id", course.id)
-        .order("sequence_order", { ascending: true });
-
-      const topicIds = (topics ?? []).map((t) => t.id);
-      const { data: subtopics } = topicIds.length
-        ? await supabase.from("subtopics").select("id, topic_id").in("topic_id", topicIds)
-        : { data: [] as { id: string; topic_id: string }[] };
-
-      const subtopicsByTopic = new Map<string, string[]>();
-      for (const s of subtopics ?? []) {
-        const list = subtopicsByTopic.get(s.topic_id) ?? [];
-        list.push(s.id);
-        subtopicsByTopic.set(s.topic_id, list);
-      }
-
-      const allSubtopicIds = (subtopics ?? []).map((s) => s.id);
-      const { data: quizzes } = allSubtopicIds.length
-        ? await supabase.from("quizzes").select("subtopic_id, questions_json").in("subtopic_id", allSubtopicIds)
-        : { data: [] as { subtopic_id: string; questions_json: unknown }[] };
-
-      const quizCountBySubtopic = new Map<string, number>();
-      for (const q of quizzes ?? []) {
-        quizCountBySubtopic.set(q.subtopic_id, Array.isArray(q.questions_json) ? q.questions_json.length : 0);
-      }
-
-      const enriched: CmsTopicWithStats[] = (topics ?? []).map((t) => {
-        const subtopicIds = subtopicsByTopic.get(t.id) ?? [];
-        const subtopicCount = subtopicIds.length;
-        const quizQuestionCount = subtopicIds.reduce((sum, id) => sum + (quizCountBySubtopic.get(id) ?? 0), 0);
+      const enriched: CmsTopicWithStats[] = (course.topics ?? []).map((t) => {
+        const subtopics = t.subtopics ?? [];
+        const subtopicCount = subtopics.length;
+        const quizQuestionCount = subtopics.reduce((sum, s) => sum + countQuizQuestions(s.quizzes), 0);
         return {
           id: t.id,
           title: t.title,
           slug: t.slug,
-          difficulty: t.difficulty && String(t.difficulty).trim() ? String(t.difficulty) : "Standard",
+          difficulty: t.difficulty && t.difficulty.trim() ? t.difficulty : "Standard",
           estMinutes: t.est_minutes && t.est_minutes > 0 ? t.est_minutes : Math.max(subtopicCount * 5, 5),
           subtopicCount,
           quizQuestionCount,

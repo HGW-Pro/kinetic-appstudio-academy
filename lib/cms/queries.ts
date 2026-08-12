@@ -3,6 +3,11 @@ import { createSupabaseServerClient } from "../supabase/server";
 import type { CourseRecord, TopicRecord, SubtopicRecord, QuizRecord } from "../admin/types";
 import { cmsModuleSlug } from "./shared";
 
+// Read-only fetchers for the PUBLIC student-facing side of the CMS. Only
+// published courses (is_published = true) are ever returned to public
+// callers -- admin views bypass this by querying the tables directly via
+// createSupabaseServerClient() with the admin's own authenticated session.
+
 export async function getPublicCourses(): Promise<CourseRecord[]> {
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
@@ -123,6 +128,8 @@ export async function getPublicQuizzesForSubtopics(subtopicIds: string[]): Promi
   return map;
 }
 
+// Alias matching the exact name requested for wiring into the main course
+// catalog page: getCmsCourses() === getPublicCourses().
 export const getCmsCourses = getPublicCourses;
 
 export interface CmsCourseWithStats extends CourseRecord {
@@ -131,55 +138,71 @@ export interface CmsCourseWithStats extends CourseRecord {
   quizQuestionCount: number;
 }
 
+interface NestedQuizRow {
+  questions_json: unknown;
+}
+interface NestedSubtopicRow {
+  id: string;
+  quizzes: NestedQuizRow[] | NestedQuizRow | null;
+}
+interface NestedTopicRow {
+  id: string;
+  subtopics: NestedSubtopicRow[] | null;
+}
+
+function quizArray(raw: NestedQuizRow[] | NestedQuizRow | null): NestedQuizRow[] {
+  return Array.isArray(raw) ? raw : raw ? [raw] : [];
+}
+
+function countQuizQuestions(raw: NestedQuizRow[] | NestedQuizRow | null): number {
+  return quizArray(raw).reduce(
+    (sum, q) => sum + (Array.isArray(q.questions_json) ? q.questions_json.length : 0),
+    0
+  );
+}
+
+// Same published-only course list as getCmsCourses(), but enriched with
+// topic/subtopic/quiz-question counts -- mirrors the metadata row the
+// premium course card already displays for the legacy hardcoded courses.
+//
+// Implemented as a single nested/embedded PostgREST query (courses ->
+// topics -> subtopics -> quizzes) instead of four separate sequential
+// round trips. The original version had to await courses, then topics
+// (needs course IDs), then subtopics (needs topic IDs), then quizzes
+// (needs subtopic IDs) -- a genuine FK dependency chain that Promise.all
+// cannot parallelize, since each step's filter depends on the previous
+// step's result. Embedding lets Postgres resolve the whole tree server-side
+// in one request.
 export async function getCmsCoursesWithStats(): Promise<CmsCourseWithStats[]> {
   const supabase = createSupabaseServerClient();
-  const courses = await getPublicCourses();
-  if (courses.length === 0) return [];
+  const { data, error } = await supabase
+    .from("courses")
+    .select(`*, topics ( id, subtopics ( id, quizzes ( questions_json ) ) )`)
+    .eq("is_published", true)
+    .order("sequence_order", { ascending: true });
 
-  const courseIds = courses.map((c) => c.id);
-
-  const { data: topics } = await supabase.from("topics").select("id, course_id").in("course_id", courseIds);
-  const topicIds = (topics ?? []).map((t) => t.id);
-  const topicCourseMap = new Map((topics ?? []).map((t) => [t.id, t.course_id]));
-
-  const { data: subtopics } = topicIds.length
-    ? await supabase.from("subtopics").select("id, topic_id").in("topic_id", topicIds)
-    : { data: [] as { id: string; topic_id: string }[] };
-  const subtopicIds = (subtopics ?? []).map((s) => s.id);
-
-  const { data: quizzes } = subtopicIds.length
-    ? await supabase.from("quizzes").select("subtopic_id, questions_json").in("subtopic_id", subtopicIds)
-    : { data: [] as { subtopic_id: string; questions_json: unknown }[] };
-
-  const subtopicTopicMap = new Map((subtopics ?? []).map((s) => [s.id, s.topic_id]));
-
-  const topicCountByCourse = new Map<string, number>();
-  for (const t of topics ?? []) {
-    topicCountByCourse.set(t.course_id, (topicCountByCourse.get(t.course_id) ?? 0) + 1);
+  if (error || !data) {
+    if (error) console.error("getCmsCoursesWithStats failed", error);
+    return [];
   }
 
-  const subtopicCountByCourse = new Map<string, number>();
-  for (const s of subtopics ?? []) {
-    const courseId = topicCourseMap.get(s.topic_id);
-    if (courseId) subtopicCountByCourse.set(courseId, (subtopicCountByCourse.get(courseId) ?? 0) + 1);
-  }
-
-  const quizQuestionCountByCourse = new Map<string, number>();
-  for (const q of quizzes ?? []) {
-    const topicId = subtopicTopicMap.get(q.subtopic_id);
-    const courseId = topicId ? topicCourseMap.get(topicId) : undefined;
-    if (courseId) {
-      const count = Array.isArray(q.questions_json) ? q.questions_json.length : 0;
-      quizQuestionCountByCourse.set(courseId, (quizQuestionCountByCourse.get(courseId) ?? 0) + count);
+  return data.map((row) => {
+    const { topics, ...courseFields } = row as CourseRecord & { topics: NestedTopicRow[] | null };
+    const topicList = topics ?? [];
+    let subtopicCount = 0;
+    let quizQuestionCount = 0;
+    for (const t of topicList) {
+      const subtopics = t.subtopics ?? [];
+      subtopicCount += subtopics.length;
+      for (const s of subtopics) quizQuestionCount += countQuizQuestions(s.quizzes);
     }
-  }
-
-  return courses.map((c) => ({
-    ...c,
-    topicCount: topicCountByCourse.get(c.id) ?? 0,
-    subtopicCount: subtopicCountByCourse.get(c.id) ?? 0,
-    quizQuestionCount: quizQuestionCountByCourse.get(c.id) ?? 0,
-  }));
+    return {
+      ...courseFields,
+      topicCount: topicList.length,
+      subtopicCount,
+      quizQuestionCount,
+    } as CmsCourseWithStats;
+  });
 }
 
 export interface CmsTopicWithStats {
@@ -193,12 +216,28 @@ export interface CmsTopicWithStats {
   quizQuestionCount: number;
 }
 
+// Topics for a course, enriched with the same metrics the legacy hardcoded
+// topic cards show (subtopic count, estimated duration, quiz question
+// count) so dynamic Supabase-backed courses render identical rich cards
+// instead of a plain numbered list.
+//
+// Single nested/embedded query (topics -> subtopics -> quizzes) instead of
+// three sequential round trips.
+//
+// Graceful fallbacks: difficulty defaults to "Standard" when null (the
+// topics.difficulty column is nullable by design); estMinutes defaults to
+// ~5 minutes per subtopic when topics.est_minutes hasn't been set -- the
+// metrics bar always renders something rather than disappearing just
+// because a topic hasn't been backfilled with that metadata yet.
 export async function getPublicTopicsWithStats(courseId: string): Promise<CmsTopicWithStats[]> {
   const supabase = createSupabaseServerClient();
 
   const { data: topics, error } = await supabase
     .from("topics")
-    .select("id, title, slug, sequence_order, difficulty, est_minutes")
+    .select(
+      `id, title, slug, sequence_order, difficulty, est_minutes,
+       subtopics ( id, quizzes ( questions_json ) )`
+    )
     .eq("course_id", courseId)
     .order("sequence_order", { ascending: true });
 
@@ -207,34 +246,16 @@ export async function getPublicTopicsWithStats(courseId: string): Promise<CmsTop
     return [];
   }
 
-  const topicIds = topics.map((t) => t.id);
-
-  const { data: subtopics } = await supabase
-    .from("subtopics")
-    .select("id, topic_id")
-    .in("topic_id", topicIds);
-
-  const subtopicsByTopic = new Map<string, string[]>();
-  for (const s of subtopics ?? []) {
-    const list = subtopicsByTopic.get(s.topic_id) ?? [];
-    list.push(s.id);
-    subtopicsByTopic.set(s.topic_id, list);
-  }
-
-  const allSubtopicIds = (subtopics ?? []).map((s) => s.id);
-  const { data: quizzes } = allSubtopicIds.length
-    ? await supabase.from("quizzes").select("subtopic_id, questions_json").in("subtopic_id", allSubtopicIds)
-    : { data: [] as { subtopic_id: string; questions_json: unknown }[] };
-
-  const quizCountBySubtopic = new Map<string, number>();
-  for (const q of quizzes ?? []) {
-    quizCountBySubtopic.set(q.subtopic_id, Array.isArray(q.questions_json) ? q.questions_json.length : 0);
-  }
-
-  return topics.map((t) => {
-    const subtopicIds = subtopicsByTopic.get(t.id) ?? [];
-    const subtopicCount = subtopicIds.length;
-    const quizQuestionCount = subtopicIds.reduce((sum, id) => sum + (quizCountBySubtopic.get(id) ?? 0), 0);
+  return (topics as unknown as (NestedTopicRow & {
+    title: string;
+    slug: string;
+    sequence_order: number;
+    difficulty: string | null;
+    est_minutes: number | null;
+  })[]).map((t) => {
+    const subtopics = t.subtopics ?? [];
+    const subtopicCount = subtopics.length;
+    const quizQuestionCount = subtopics.reduce((sum, s) => sum + countQuizQuestions(s.quizzes), 0);
     return {
       id: t.id,
       title: t.title,
@@ -260,51 +281,56 @@ export interface CmsTopicDetail {
 // "Topic X of Y" breadcrumb), every subtopic with its own duration, and
 // the total quiz question count aggregated across all of that topic's
 // subtopics' linked quizzes -- everything the premium topic overview UI
-// needs in one call.
+// needs, fetched via a single nested/embedded query (all topics in the
+// course plus each one's subtopics and quizzes) instead of three
+// sequential round trips.
 export async function getPublicTopicDetail(courseId: string, topicSlug: string): Promise<CmsTopicDetail | null> {
   const supabase = createSupabaseServerClient();
 
-  const { data: allTopics, error: topicsErr } = await supabase
+  const { data: allTopics, error } = await supabase
     .from("topics")
-    .select("id, title, slug, sequence_order, difficulty")
+    .select(
+      `id, title, slug, sequence_order, difficulty,
+       subtopics ( id, title, sequence_order, est_minutes, quizzes ( questions_json ) )`
+    )
     .eq("course_id", courseId)
     .order("sequence_order", { ascending: true });
 
-  if (topicsErr || !allTopics) {
-    if (topicsErr) console.error("getPublicTopicDetail failed", topicsErr);
+  if (error || !allTopics) {
+    if (error) console.error("getPublicTopicDetail failed", error);
     return null;
   }
 
-  const topicRow = allTopics.find((t) => t.slug === topicSlug);
+  type RawSubtopic = {
+    id: string;
+    title: string;
+    sequence_order: number;
+    est_minutes: number | null;
+    quizzes: NestedQuizRow[] | NestedQuizRow | null;
+  };
+  type RawTopic = {
+    id: string;
+    title: string;
+    slug: string;
+    sequence_order: number;
+    difficulty: string | null;
+    subtopics: RawSubtopic[] | null;
+  };
+
+  const topicRow = (allTopics as unknown as RawTopic[]).find((t) => t.slug === topicSlug);
   if (!topicRow) return null;
 
-  const { data: subtopics } = await supabase
-    .from("subtopics")
-    .select("id, title, sequence_order, est_minutes")
-    .eq("topic_id", topicRow.id)
-    .order("sequence_order", { ascending: true });
-
-  const subtopicRows = (subtopics ?? []).map((s) => ({
+  const subtopicRows = (topicRow.subtopics ?? []).map((s) => ({
     id: s.id,
     title: s.title,
     sequence_order: s.sequence_order,
     estMinutes: s.est_minutes && s.est_minutes > 0 ? s.est_minutes : 5,
   }));
 
-  const subtopicIds = subtopicRows.map((s) => s.id);
-  let quizQuestionCount = 0;
-  if (subtopicIds.length > 0) {
-    const { data: quizzes } = await supabase
-      .from("quizzes")
-      .select("questions_json")
-      .in("subtopic_id", subtopicIds);
-    quizQuestionCount = (quizzes ?? []).reduce(
-      (sum, q) => sum + (Array.isArray(q.questions_json) ? q.questions_json.length : 0),
-      0
-    );
-  }
-
-  const totalSubtopicCount = subtopicRows.length;
+  const quizQuestionCount = (topicRow.subtopics ?? []).reduce(
+    (sum, s) => sum + countQuizQuestions(s.quizzes),
+    0
+  );
 
   return {
     topic: {
@@ -314,7 +340,7 @@ export async function getPublicTopicDetail(courseId: string, topicSlug: string):
       sequence_order: topicRow.sequence_order,
       difficulty: topicRow.difficulty && String(topicRow.difficulty).trim() ? String(topicRow.difficulty) : "Standard",
       estMinutes: Math.max(subtopicRows.reduce((sum, s) => sum + s.estMinutes, 0), 5),
-      subtopicCount: totalSubtopicCount,
+      subtopicCount: subtopicRows.length,
       quizQuestionCount,
     },
     topicCount: allTopics.length,
