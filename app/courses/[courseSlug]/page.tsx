@@ -164,7 +164,7 @@ export default function CoursePage({ params }: { params: { courseSlug: string } 
           <h1 className="mt-4 text-3xl font-bold text-[var(--text-hi)]">{course.title}</h1>
           <p className="mt-2 max-w-2xl text-sm text-[var(--text-mid)]">{course.tagline}</p>
           <p className="mt-1 text-xs text-[var(--text-lo)]">
-            Topics unlock strictly in order — complete a topic's assignment to move to the next.
+            Topics unlock strictly in order — complete a topic's assessment to move to the next.
           </p>
         </div>
 
@@ -209,7 +209,7 @@ export default function CoursePage({ params }: { params: { courseSlug: string } 
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-[var(--text-hi)]">{t.quiz.length}</p>
-                    <p>quiz Qs</p>
+                    <p>assessment Qs</p>
                   </div>
                   {!isLocked && (
                     <span className="text-lg text-[var(--text-lo)] transition group-hover:translate-x-1 group-hover:text-[var(--primary)]">
@@ -260,7 +260,7 @@ export default function CoursePage({ params }: { params: { courseSlug: string } 
           <p className="mt-2 max-w-2xl text-sm text-[var(--text-mid)]">{cmsCourse.description}</p>
         )}
         <p className="mt-1 text-xs text-[var(--text-lo)]">
-          Topics unlock strictly in order — complete a topic's assignment to move to the next.
+          Topics unlock strictly in order — complete a topic's assessment to move to the next.
         </p>
       </div>
 
@@ -305,7 +305,7 @@ export default function CoursePage({ params }: { params: { courseSlug: string } 
                 </div>
                 <div>
                   <p className="text-sm font-semibold text-[var(--text-hi)]">{t.quizQuestionCount}</p>
-                  <p>quiz Qs</p>
+                <p>assessment Qs</p>
                 </div>
                 {!isLocked && (
                   <span className="text-lg text-[var(--text-lo)] transition group-hover:translate-x-1 group-hover:text-[var(--primary)]">

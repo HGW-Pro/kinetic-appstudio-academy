@@ -23,10 +23,11 @@ type TopicOverviewProps = {
   onContinue: () => void;
   isContinuing: boolean;
   challenge?: ReactNode;
+  practicalMilestone?: ReactNode;
 };
 
 export default function TopicOverview(props: TopicOverviewProps) {
-  const { courseSlug, courseTitle, topicSlug, title, description, difficulty, estMinutes, prerequisiteName, objectives, lessons, completedIds, isSignedIn, isEnrolled, isCertified, onContinue, isContinuing, challenge } = props;
+  const { courseSlug, courseTitle, topicSlug, title, description, difficulty, estMinutes, prerequisiteName, objectives, lessons, completedIds, isSignedIn, isEnrolled, isCertified, onContinue, isContinuing, challenge, practicalMilestone } = props;
   const completedCount = lessons.filter((lesson) => completedIds.includes(lesson.id)).length;
   const progress = lessons.length ? Math.round((completedCount / lessons.length) * 100) : 0;
   const firstAvailable = lessons.find((lesson) => !completedIds.includes(lesson.id)) ?? lessons[lessons.length - 1];
@@ -68,6 +69,8 @@ export default function TopicOverview(props: TopicOverviewProps) {
           })}
         </ol>
       </section>
+
+      {practicalMilestone && <section className="border-l-4 border-[var(--primary)] bg-[var(--primary)]/[0.05] px-5 py-5" aria-label="Practical lab">{practicalMilestone}</section>}
 
       {challenge && <section className="border-l-4 border-[var(--accent)] bg-[var(--accent-soft)] px-5 py-4" aria-label="Practical challenge">{challenge}</section>}
 

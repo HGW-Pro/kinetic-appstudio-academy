@@ -10,7 +10,10 @@ import { z } from "zod";
 // lib/training-import.ts and any admin component importing from here
 // keeps working without modification.
 
-export const TRAINING_SCHEMA_VERSION = "2.0" as const;
+// 2.1 adds composable learning-experience blocks and expected actions for
+// guided interactions.  Documents declaring 2.0 (and documents with no
+// version) remain valid so already-imported CMS JSON is unaffected.
+export const TRAINING_SCHEMA_VERSION = "2.1" as const;
 
 export type InteractiveElementKind =
   | "input"
@@ -54,7 +57,24 @@ export interface GuidedStep {
   targetId: string;
   title: string;
   instruction: string;
+  /** Optional in 2.0-compatible content. New guided steps should provide it. */
+  interaction?: TrainingInteraction;
+  hint?: string;
+  whyCorrect?: string;
+  nextStep?: string;
 }
+
+export type InputValidationRule =
+  | { type: "equals"; value: string }
+  | { type: "includes"; value: string }
+  | { type: "pattern"; value: string; flags?: string }
+  | { type: "non-empty" };
+
+export type TrainingInteraction =
+  | { type: "click"; target: string; expectedAction: string }
+  | { type: "input"; target: string; validation: InputValidationRule }
+  | { type: "select"; target: string; expectedValue: string }
+  | { type: "sequence"; steps: string[] };
 
 export interface InteractiveUIBlock {
   type: "InteractiveUI";
@@ -75,7 +95,50 @@ export interface VisualMockupBlock {
   elements: { label: string; kind: "input" | "button" | "text" | "panel" }[];
 }
 export interface FlowDiagramBlock { type: "FlowDiagram"; steps: { label: string; description?: string }[] }
-export type TrainingContentBlock = SlideTextBlock | VisualMockupBlock | FlowDiagramBlock | InteractiveUIBlock;
+export interface CalloutBlock { type: "Callout"; title?: string; body: string; tone?: "info" | "success" | "neutral" }
+export interface ProTipBlock { type: "ProTip"; title?: string; body: string }
+export interface WarningBlock { type: "Warning"; title?: string; body: string }
+export interface StepSequenceBlock { type: "StepSequence"; title?: string; steps: { title: string; detail?: string }[] }
+export interface ComparisonBlock {
+  type: "Comparison";
+  title?: string;
+  columns: { title: string; items: string[] }[];
+}
+export interface WhyThisMattersBlock { type: "WhyThisMatters"; body: string; items?: string[] }
+export interface UsedLaterBlock { type: "UsedLater"; items: string[]; title?: string }
+export interface PracticeExerciseBlock {
+  type: "PracticeExercise";
+  title: string;
+  objective?: string;
+  instructions: string[];
+  hints?: string[];
+  solution?: string;
+}
+export interface DebuggingChallengeBlock {
+  type: "DebuggingChallenge";
+  title?: string;
+  scenario: string;
+  flow?: { label: string; description?: string }[];
+  question?: string;
+  options: string[];
+  correctIndex: number;
+  rootCause: string;
+  nextStep?: string;
+}
+export type TrainingContentBlock =
+  | SlideTextBlock
+  | VisualMockupBlock
+  | FlowDiagramBlock
+  | InteractiveUIBlock
+  | CalloutBlock
+  | ProTipBlock
+  | WarningBlock
+  | StepSequenceBlock
+  | ComparisonBlock
+  | WhyThisMattersBlock
+  | UsedLaterBlock
+  | PracticeExerciseBlock
+  | DebuggingChallengeBlock;
 
 export class TrainingSchemaError extends Error {
   constructor(public readonly path: string, message: string) {
@@ -133,6 +196,26 @@ const GuidedStepSchema = z.object({
   targetId: nonEmptyString,
   title: nonEmptyString,
   instruction: nonEmptyString,
+  interaction: z
+    .discriminatedUnion("type", [
+      z.object({ type: z.literal("click"), target: nonEmptyString, expectedAction: nonEmptyString }),
+      z.object({
+        type: z.literal("input"),
+        target: nonEmptyString,
+        validation: z.discriminatedUnion("type", [
+          z.object({ type: z.literal("equals"), value: nonEmptyString }),
+          z.object({ type: z.literal("includes"), value: nonEmptyString }),
+          z.object({ type: z.literal("pattern"), value: nonEmptyString, flags: z.string().optional() }),
+          z.object({ type: z.literal("non-empty") }),
+        ]),
+      }),
+      z.object({ type: z.literal("select"), target: nonEmptyString, expectedValue: nonEmptyString }),
+      z.object({ type: z.literal("sequence"), steps: z.array(nonEmptyString).min(2, "must contain at least two actions") }),
+    ])
+    .optional(),
+  hint: nonEmptyString.optional(),
+  whyCorrect: nonEmptyString.optional(),
+  nextStep: nonEmptyString.optional(),
 });
 
 const InteractiveUIBlockSchema = z
@@ -153,6 +236,31 @@ const InteractiveUIBlockSchema = z
           path: ["guidedSteps", i, "targetId"],
         });
       }
+      if (step.interaction?.type !== "sequence" && step.interaction && !elementIds.has(step.interaction.target)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "must reference an existing element id",
+          path: ["guidedSteps", i, "interaction", "target"],
+        });
+      }
+      if (step.interaction?.type !== "sequence" && step.interaction && step.interaction.target !== step.targetId) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "must match targetId",
+          path: ["guidedSteps", i, "interaction", "target"],
+        });
+      }
+      if (step.interaction?.type === "sequence") {
+        step.interaction.steps.forEach((target, sequenceIndex) => {
+          if (!elementIds.has(target)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "must reference an existing element id",
+              path: ["guidedSteps", i, "interaction", "steps", sequenceIndex],
+            });
+          }
+        });
+      }
     });
     if (block.mode === "guided" && block.guidedSteps.length === 0) {
       ctx.addIssue({
@@ -163,9 +271,95 @@ const InteractiveUIBlockSchema = z
     }
   });
 
+const SlideNodeSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("paragraph"), text: nonEmptyString }),
+  z.object({ type: z.literal("image"), src: nonEmptyString, alt: z.string(), caption: z.string().optional() }),
+]);
+const SlideTextBlockSchema = z.object({
+  type: z.literal("SlideText"),
+  heading: z.string().optional(),
+  body: z.array(SlideNodeSchema).min(1, "must have at least one node"),
+  proTip: z.string().optional(),
+});
+const VisualMockupBlockSchema = z.object({
+  type: z.literal("VisualMockup"),
+  mockupType: z.enum(["browser", "form", "menu", "dialog"]),
+  title: nonEmptyString,
+  elements: z.array(z.object({ label: nonEmptyString, kind: z.enum(["input", "button", "text", "panel"]) })),
+});
+const FlowStepSchema = z.object({ label: nonEmptyString, description: z.string().optional() });
+const FlowDiagramBlockSchema = z.object({ type: z.literal("FlowDiagram"), steps: z.array(FlowStepSchema).min(1, "must have at least one step") });
+const CalloutBlockSchema = z.object({
+  type: z.literal("Callout"),
+  title: z.string().optional(),
+  body: nonEmptyString,
+  tone: z.enum(["info", "success", "neutral"]).optional(),
+});
+const ProTipBlockSchema = z.object({ type: z.literal("ProTip"), title: z.string().optional(), body: nonEmptyString });
+const WarningBlockSchema = z.object({ type: z.literal("Warning"), title: z.string().optional(), body: nonEmptyString });
+const StepSequenceBlockSchema = z.object({
+  type: z.literal("StepSequence"),
+  title: z.string().optional(),
+  steps: z.array(z.object({ title: nonEmptyString, detail: z.string().optional() })).min(1, "must have at least one step"),
+});
+const ComparisonBlockSchema = z.object({
+  type: z.literal("Comparison"),
+  title: z.string().optional(),
+  columns: z.array(z.object({ title: nonEmptyString, items: z.array(nonEmptyString).min(1) })).min(2, "must compare at least two columns"),
+});
+const WhyThisMattersBlockSchema = z.object({
+  type: z.literal("WhyThisMatters"),
+  body: nonEmptyString,
+  items: z.array(nonEmptyString).optional(),
+});
+const UsedLaterBlockSchema = z.object({
+  type: z.literal("UsedLater"),
+  title: z.string().optional(),
+  items: z.array(nonEmptyString).min(1, "must contain at least one dependency"),
+});
+const PracticeExerciseBlockSchema = z.object({
+  type: z.literal("PracticeExercise"),
+  title: nonEmptyString,
+  objective: z.string().optional(),
+  instructions: z.array(nonEmptyString).min(1, "must have at least one instruction"),
+  hints: z.array(nonEmptyString).optional(),
+  solution: z.string().optional(),
+});
+const DebuggingChallengeBlockSchema = z.object({
+  type: z.literal("DebuggingChallenge"),
+  title: z.string().optional(),
+  scenario: nonEmptyString,
+  flow: z.array(FlowStepSchema).optional(),
+  question: z.string().optional(),
+  options: z.array(nonEmptyString).min(2, "must have at least two choices"),
+  correctIndex: z.number().int().nonnegative(),
+  rootCause: nonEmptyString,
+  nextStep: z.string().optional(),
+}).superRefine((block, ctx) => {
+  if (block.correctIndex >= block.options.length) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: "must be a valid index into options", path: ["correctIndex"] });
+  }
+});
+
+const TrainingContentBlockSchema = z.union([
+  SlideTextBlockSchema,
+  VisualMockupBlockSchema,
+  FlowDiagramBlockSchema,
+  InteractiveUIBlockSchema,
+  CalloutBlockSchema,
+  ProTipBlockSchema,
+  WarningBlockSchema,
+  StepSequenceBlockSchema,
+  ComparisonBlockSchema,
+  WhyThisMattersBlockSchema,
+  UsedLaterBlockSchema,
+  PracticeExerciseBlockSchema,
+  DebuggingChallengeBlockSchema,
+]);
+
 const TrainingDocumentSchema = z.object({
   schemaVersion: z
-    .literal("2.0", { errorMap: () => ({ message: "must be 2.0 when provided" }) })
+    .enum(["2.0", "2.1"], { errorMap: () => ({ message: "must be 2.0 or 2.1 when provided" }) })
     .optional(),
   courses: z.array(z.unknown()).min(1, "must be a non-empty array"),
 });
@@ -198,12 +392,16 @@ export function validateTrainingBlock(raw: unknown, path: string): TrainingConte
   if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
     throw new TrainingSchemaError(path, "must be an object");
   }
-  const block = raw as Record<string, unknown>;
-  if (block.type === "InteractiveUI") return validateInteractiveUIBlock(raw, path);
-  if (block.type === "SlideText" || block.type === "FlowDiagram" || block.type === "VisualMockup") {
+  // Keep the original three block shapes permissive. Existing imports predate
+  // the Zod validator and can contain legacy-compatible node variations that
+  // the renderer already normalizes safely.
+  const legacyType = (raw as Record<string, unknown>).type;
+  if (legacyType === "SlideText" || legacyType === "VisualMockup" || legacyType === "FlowDiagram") {
     return raw as TrainingContentBlock;
   }
-  throw new TrainingSchemaError(`${path}.type`, "must be SlideText, FlowDiagram, VisualMockup, or InteractiveUI");
+  const result = TrainingContentBlockSchema.safeParse(raw);
+  if (!result.success) throwFirstIssue(path, result);
+  return result.data as TrainingContentBlock;
 }
 
 export function validateTrainingDocument(raw: unknown): { schemaVersion?: string; courses: unknown[] } {
@@ -295,14 +493,10 @@ export function validateTrainingDocumentDetailed(rawText: string): {
           const basePathSegments: (string | number)[] = [
             "courses", ci, "topics", ti, "subtopics", si, "content", bi,
           ];
-          if (
-            typeof block !== "object" ||
-            block === null ||
-            (block as Record<string, unknown>).type !== "InteractiveUI"
-          ) {
-            return;
-          }
-          const blockResult = InteractiveUIBlockSchema.safeParse(block);
+          if (typeof block !== "object" || block === null) return;
+          const blockType = (block as Record<string, unknown>).type;
+          if (blockType === "SlideText" || blockType === "VisualMockup" || blockType === "FlowDiagram") return;
+          const blockResult = TrainingContentBlockSchema.safeParse(block);
           if (!blockResult.success) {
             for (const issue of blockResult.error.issues) {
               issues.push({

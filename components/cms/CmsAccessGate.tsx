@@ -97,7 +97,7 @@ export default function CmsAccessGate({
         <h1 className="mt-4 text-xl font-bold text-[var(--text-hi)]">This topic is locked</h1>
         <p className="mt-2 text-sm text-[var(--text-mid)]">
           {user
-            ? `Pass the assignment for "${blockerTitle}" first (score 80%+) to unlock this topic.`
+            ? `Pass the assessment for "${blockerTitle}" first (score 80%+) to unlock this topic.`
             : "Sign in and complete the course in order to unlock this topic."}
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
@@ -159,7 +159,7 @@ export default function CmsAccessGate({
           Enroll to start "{currentTopic?.title ?? "this topic"}"
         </h1>
         <p className="mt-2 text-sm text-[var(--text-mid)]">
-          You need to enroll before you can open its subtopics or take the assignment.
+          You need to enroll before you can open its subtopics or take the assessment.
         </p>
         {enrollError && (
           <p className="mt-3 rounded-lg border border-[var(--error)]/30 bg-[var(--error-soft)] px-4 py-2 text-xs text-[var(--error)]">

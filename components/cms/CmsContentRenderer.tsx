@@ -3,10 +3,12 @@
 import { useState } from "react";
 import type { ContentBlock, QuizQuestionSchema } from "../../lib/admin/types";
 import { normalizeContentBlocks } from "../../lib/admin/types";
-import { validateInteractiveUIBlock } from "../../lib/training-schema";
+import { validateInteractiveUIBlock, validateTrainingBlock, type DebuggingChallengeBlock, type TrainingContentBlock } from "../../lib/training-schema";
 import InteractiveUI from "../InteractiveUI";
 import QuizEngine from "../QuizEngine";
+import ChallengePanel from "../learning/ChallengePanel";
 import LessonSection, { type LearningMode } from "../learning/LessonSection";
+import PracticeExercise from "../learning/PracticeExercise";
 
 function renderBold(text: string) {
   const parts = text.split(/\*\*(.*?)\*\*/g);
@@ -33,7 +35,7 @@ function FlowDiagramRenderer({ block }: { block: Extract<ContentBlock, { type: "
 }
 
 type QuizContext = { moduleSlug: string; moduleTitle: string; nextHref?: string };
-type RawBlock = { type?: unknown; mode?: unknown; questions?: unknown };
+type RawBlock = { type?: unknown; mode?: unknown; learningMode?: unknown; questions?: unknown };
 
 function explicitMode(value: unknown): LearningMode | null {
   if (typeof value !== "string") return null;
@@ -48,8 +50,10 @@ function explicitMode(value: unknown): LearningMode | null {
 }
 
 function inferMode(raw: RawBlock): LearningMode {
-  const declared = explicitMode(raw.mode);
+  const declared = explicitMode(raw.learningMode) ?? explicitMode(raw.mode);
   if (declared) return declared;
+  if (raw.type === "DebuggingChallenge") return "Challenge";
+  if (raw.type === "PracticeExercise") return "Practice";
   if (raw.type === "InteractiveUI") return "Explore";
   if (raw.type === "Quiz") return "Knowledge Check";
   if (raw.type === "VisualMockup" || raw.type === "FlowDiagram") return "See";
@@ -62,6 +66,54 @@ function isQuizQuestion(value: unknown): value is QuizQuestionSchema {
   return typeof question.question === "string" && Array.isArray(question.options) && typeof question.correctIndex === "number" && typeof question.explanation === "string";
 }
 
+function DebuggingChallenge({ block }: { block: DebuggingChallengeBlock }) {
+  const [selected, setSelected] = useState<number | null>(null);
+  const answered = selected !== null;
+  const correct = selected === block.correctIndex;
+
+  return (
+    <ChallengePanel title={block.title ?? "Debug this customization"} scenario={block.scenario}>
+      {block.flow && block.flow.length > 0 && <FlowDiagramRenderer block={{ type: "FlowDiagram", steps: block.flow }} />}
+      <fieldset className="mt-5">
+        <legend className="text-base font-semibold text-[var(--text-hi)]">{block.question ?? "What is wrong?"}</legend>
+        <div className="mt-3 space-y-2">
+          {block.options.map((option, optionIndex) => {
+            const isSelected = selected === optionIndex;
+            const style = answered && optionIndex === block.correctIndex
+              ? "border-[var(--success)]/50 bg-[var(--success-soft)] text-[var(--success)]"
+              : answered && isSelected
+                ? "border-[var(--error)]/50 bg-[var(--error-soft)] text-[var(--error)]"
+                : "border-[var(--border)] bg-[var(--surface)] text-[var(--text-mid)] hover:border-[var(--primary)]";
+            return <button key={`${option}-${optionIndex}`} type="button" disabled={answered} onClick={() => setSelected(optionIndex)} className={`w-full border px-4 py-3 text-left text-sm transition disabled:cursor-default ${style}`}>{option}</button>;
+          })}
+        </div>
+      </fieldset>
+      {answered && (
+        <div className={`mt-4 border-l-2 px-4 py-3 text-sm leading-6 ${correct ? "border-[var(--success)] bg-[var(--success-soft)]" : "border-[var(--error)] bg-[var(--error-soft)]"}`} role="status">
+          <p className={`font-semibold ${correct ? "text-[var(--success)]" : "text-[var(--error)]"}`}>{correct ? "Correct." : "Not quite."}</p>
+          <p className="mt-1 text-[var(--text-mid)]"><span className="font-semibold text-[var(--text-hi)]">Root cause:</span> {block.rootCause}</p>
+          {block.nextStep && <p className="mt-1 text-[var(--text-mid)]"><span className="font-semibold text-[var(--text-hi)]">What to do next:</span> {block.nextStep}</p>}
+        </div>
+      )}
+    </ChallengePanel>
+  );
+}
+
+function ExperienceBlockRenderer({ block }: { block: Exclude<TrainingContentBlock, { type: "InteractiveUI" | "SlideText" | "VisualMockup" | "FlowDiagram" }> }) {
+  if (block.type === "Callout") {
+    const tones = { info: "border-[var(--primary)]/30 bg-[var(--primary)]/[0.05]", success: "border-[var(--success)]/30 bg-[var(--success-soft)]", neutral: "border-[var(--border)] bg-[var(--surface-2)]" };
+    return <aside className={`border-l-4 px-4 py-3 text-sm leading-6 text-[var(--text-mid)] ${tones[block.tone ?? "info"]}`}><p className="font-semibold text-[var(--text-hi)]">{block.title ?? "Key point"}</p><p className="mt-1">{block.body}</p></aside>;
+  }
+  if (block.type === "ProTip") return <aside className="border-l-4 border-[var(--primary)] bg-[var(--primary)]/[0.05] px-4 py-3 text-sm leading-6 text-[var(--text-mid)]"><p className="font-semibold text-[var(--primary)]">{block.title ?? "Pro tip"}</p><p className="mt-1">{block.body}</p></aside>;
+  if (block.type === "Warning") return <aside className="border-l-4 border-[var(--accent)] bg-[var(--accent-soft)] px-4 py-3 text-sm leading-6 text-[var(--text-mid)]"><p className="font-semibold text-[var(--accent)]">{block.title ?? "Watch out"}</p><p className="mt-1">{block.body}</p></aside>;
+  if (block.type === "WhyThisMatters") return <aside className="border border-[var(--primary)]/25 bg-[var(--primary)]/[0.04] p-5"><p className="text-xs font-semibold uppercase tracking-[0.13em] text-[var(--primary)]">Why this matters</p><p className="mt-2 text-sm leading-6 text-[var(--text-mid)]">{block.body}</p>{block.items && block.items.length > 0 && <ul className="mt-3 space-y-2 text-sm text-[var(--text-mid)]">{block.items.map((item, index) => <li key={`${item}-${index}`} className="flex gap-2"><span className="text-[var(--primary)]">•</span><span>{item}</span></li>)}</ul>}</aside>;
+  if (block.type === "UsedLater") return <aside className="border-l-4 border-[var(--success)] bg-[var(--success-soft)] px-5 py-4"><p className="text-xs font-semibold uppercase tracking-[0.13em] text-[var(--success)]">{block.title ?? "Used later in"}</p><ul className="mt-3 space-y-2 text-sm text-[var(--text-mid)]">{block.items.map((item, index) => <li key={`${item}-${index}`} className="flex gap-2"><span className="font-semibold text-[var(--success)]">→</span><span>{item}</span></li>)}</ul></aside>;
+  if (block.type === "StepSequence") return <section><h3 className="text-base font-semibold text-[var(--text-hi)]">{block.title ?? "Steps"}</h3><ol className="mt-4 space-y-3">{block.steps.map((step, index) => <li key={`${step.title}-${index}`} className="flex gap-3 border-l-2 border-[var(--primary)]/25 pl-4"><span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[var(--primary)] text-xs font-semibold text-white">{index + 1}</span><span><span className="block text-sm font-semibold text-[var(--text-hi)]">{step.title}</span>{step.detail && <span className="mt-0.5 block text-sm leading-6 text-[var(--text-mid)]">{step.detail}</span>}</span></li>)}</ol></section>;
+  if (block.type === "Comparison") return <section><h3 className="text-base font-semibold text-[var(--text-hi)]">{block.title ?? "Compare the options"}</h3><div className="mt-4 grid gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] sm:grid-cols-2">{block.columns.map((column, index) => <div key={`${column.title}-${index}`} className="bg-[var(--surface)] p-4"><h4 className="text-sm font-semibold text-[var(--text-hi)]">{column.title}</h4><ul className="mt-3 space-y-2 text-sm text-[var(--text-mid)]">{column.items.map((item, itemIndex) => <li key={`${item}-${itemIndex}`} className="flex gap-2"><span className="text-[var(--primary)]">•</span><span>{item}</span></li>)}</ul></div>)}</div></section>;
+  if (block.type === "PracticeExercise") return <PracticeExercise title={block.title} objective={block.objective} instructions={block.instructions} hints={block.hints} solution={block.solution} />;
+  return <DebuggingChallenge block={block} />;
+}
+
 function renderBlock(raw: unknown, normalized: ContentBlock, index: number, quizContext?: QuizContext) {
   const rawBlock = (raw && typeof raw === "object" ? raw : {}) as RawBlock;
   if (rawBlock.type === "InteractiveUI") {
@@ -71,7 +123,15 @@ function renderBlock(raw: unknown, normalized: ContentBlock, index: number, quiz
   if (rawBlock.type === "Quiz") {
     const questions = Array.isArray(rawBlock.questions) ? rawBlock.questions.filter(isQuizQuestion) : [];
     if (!quizContext || questions.length === 0) return <div key={index} className="rounded-lg border border-[var(--border)] bg-[var(--surface-2)] p-4 text-sm text-[var(--text-mid)]">This knowledge check is not available yet.</div>;
-    return <QuizEngine key={index} moduleSlug={quizContext.moduleSlug} moduleTitle={quizContext.moduleTitle} questions={questions.map((question, questionIndex) => ({ ...question, id: `content-quiz-${index}-${questionIndex}` }))} nextHref={quizContext.nextHref} />;
+    return <QuizEngine key={index} moduleSlug={quizContext.moduleSlug} moduleTitle={quizContext.moduleTitle} label="Knowledge Check" questions={questions.map((question, questionIndex) => ({ ...question, id: `content-quiz-${index}-${questionIndex}` }))} nextHref={quizContext.nextHref} />;
+  }
+  if (["Callout", "ProTip", "Warning", "StepSequence", "Comparison", "WhyThisMatters", "UsedLater", "PracticeExercise", "DebuggingChallenge"].includes(String(rawBlock.type))) {
+    try {
+      const block = validateTrainingBlock(raw, `content[${index}]`);
+      if (block.type !== "InteractiveUI" && block.type !== "SlideText" && block.type !== "VisualMockup" && block.type !== "FlowDiagram") return <ExperienceBlockRenderer key={index} block={block} />;
+    } catch {
+      return <div key={index} className="rounded-lg border border-[var(--error)]/30 bg-[var(--error-soft)] p-4 text-sm text-[var(--error)]">This learning block configuration is invalid.</div>;
+    }
   }
   return <div key={index}>{normalized.type === "SlideText" && <SlideTextRenderer block={normalized} />}{normalized.type === "VisualMockup" && <VisualMockupRenderer block={normalized} />}{normalized.type === "FlowDiagram" && <FlowDiagramRenderer block={normalized} />}</div>;
 }

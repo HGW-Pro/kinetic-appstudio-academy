@@ -103,9 +103,9 @@ export default function TopicQuizPage({
       return (
         <div className="glass-card glow-border mx-auto max-w-lg rounded-2xl p-10 text-center">
           <div className="text-5xl">🔒</div>
-          <h1 className="mt-4 text-xl font-bold text-[var(--text-hi)]">Sign in to take this assignment</h1>
+          <h1 className="mt-4 text-xl font-bold text-[var(--text-hi)]">Sign in to take this assessment</h1>
           <p className="mt-2 text-sm text-[var(--text-mid)]">
-            Assignments and certifications are tied to your account so progress syncs across devices.
+            Assessments and certifications are tied to your account so progress syncs across devices.
           </p>
           <div className="mt-6 flex flex-wrap justify-center gap-3">
             <Link
@@ -132,7 +132,7 @@ export default function TopicQuizPage({
             <div className="text-5xl">📘</div>
             <h1 className="mt-4 text-xl font-bold text-[var(--text-hi)]">Finish the subtopics first</h1>
             <p className="mt-2 text-sm text-[var(--text-mid)]">
-              Complete every subtopic in this topic before taking the assignment.
+              Complete every subtopic in this topic before taking the assessment.
             </p>
             <Link
               href={`/courses/${params.courseSlug}/${params.topicSlug}`}
@@ -144,9 +144,9 @@ export default function TopicQuizPage({
         ) : (
           <div className="space-y-8">
             <div className="text-center">
-              <span className="badge-pill mx-auto w-fit">📝 Knowledge Check</span>
+              <span className="badge-pill mx-auto w-fit">📝 Assessment</span>
               <h1 className="mt-4 text-2xl font-bold text-[var(--text-hi)] sm:text-3xl">
-                {topic.title} — Assignment
+                {topic.title} — Assessment
               </h1>
               <p className="mt-2 text-sm text-[var(--text-mid)]">
                 {topic.quiz.length} questions · Instant feedback · 80% required to pass
@@ -156,6 +156,7 @@ export default function TopicQuizPage({
               moduleSlug={topic.slug}
               moduleTitle={topic.title}
               questions={topic.quiz}
+              label="Assessment"
               nextHref={nextTopic ? `/courses/${params.courseSlug}/${nextTopic.slug}` : undefined}
             />
           </div>
@@ -171,7 +172,7 @@ export default function TopicQuizPage({
     return (
       <div className="glass-card glow-border mx-auto max-w-lg rounded-2xl p-10 text-center">
         <div className="text-5xl">🔒</div>
-        <h1 className="mt-4 text-xl font-bold text-[var(--text-hi)]">Sign in to take this assignment</h1>
+        <h1 className="mt-4 text-xl font-bold text-[var(--text-hi)]">Sign in to take this assessment</h1>
         <div className="mt-6 flex flex-wrap justify-center gap-3">
           <Link
             href="/login"
@@ -196,9 +197,9 @@ export default function TopicQuizPage({
   return (
     <div className="space-y-8">
       <div className="text-center">
-        <span className="badge-pill mx-auto w-fit">📝 Knowledge Check</span>
+        <span className="badge-pill mx-auto w-fit">📝 Assessment</span>
         <h1 className="mt-4 text-2xl font-bold text-[var(--text-hi)] sm:text-3xl">
-          {cmsTopicTitle} — Assignment
+          {cmsTopicTitle} — Assessment
         </h1>
         <p className="mt-2 text-sm text-[var(--text-mid)]">
           {cmsQuestions.length} questions · Instant feedback · 80% required to pass
@@ -208,6 +209,7 @@ export default function TopicQuizPage({
         moduleSlug={moduleSlug}
         moduleTitle={cmsTopicTitle}
         questions={questionsWithId}
+        label="Assessment"
         nextHref={`/courses/${params.courseSlug}`}
       />
     </div>

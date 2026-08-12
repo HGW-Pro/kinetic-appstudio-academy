@@ -79,7 +79,7 @@ function useQuizLockout(moduleSlug: string, userId: string | undefined, refreshK
   return { status, checked };
 }
 
-function LockoutScreen({ lockedUntil }: { lockedUntil: string }) {
+function LockoutScreen({ lockedUntil, label }: { lockedUntil: string; label: "Knowledge Check" | "Assessment" }) {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     const interval = setInterval(() => setNow(Date.now()), 1000);
@@ -93,7 +93,7 @@ function LockoutScreen({ lockedUntil }: { lockedUntil: string }) {
       <div className="glass-card glow-border mx-auto max-w-xl rounded-2xl p-10 text-center">
         <div className="text-5xl">🔓</div>
         <h2 className="mt-4 text-xl font-bold text-[var(--text-hi)]">Lockout lifted</h2>
-        <p className="mt-2 text-sm text-[var(--text-mid)]">Refresh the page to try the quiz again.</p>
+        <p className="mt-2 text-sm text-[var(--text-mid)]">Refresh the page to try the {label.toLowerCase()} again.</p>
       </div>
     );
   }
@@ -101,9 +101,9 @@ function LockoutScreen({ lockedUntil }: { lockedUntil: string }) {
   return (
     <div className="glass-card glow-border mx-auto max-w-xl rounded-2xl p-10 text-center">
       <div className="text-5xl">🔒</div>
-      <h2 className="mt-4 text-xl font-bold text-[var(--text-hi)]">Quiz temporarily locked</h2>
+      <h2 className="mt-4 text-xl font-bold text-[var(--text-hi)]">{label} temporarily locked</h2>
       <p className="mt-2 text-sm text-[var(--text-mid)]">
-        You've missed this quiz 3 times in a row. Take a break and review the subtopics — you can
+        You&apos;ve missed this {label.toLowerCase()} 3 times in a row. Take a break and review the subtopics — you can
         try again in:
       </p>
       <p className="mt-4 rounded-lg bg-[var(--surface-2)] px-4 py-3 font-mono text-lg font-semibold text-[var(--primary)]">
@@ -133,11 +133,14 @@ export default function QuizEngine({
   moduleTitle,
   questions,
   nextHref,
+  label = "Knowledge Check",
 }: {
   moduleSlug: string;
   moduleTitle: string;
   questions: QuizQuestion[];
   nextHref?: string;
+  /** Presentation-only terminology; scoring and lockout behavior are unchanged. */
+  label?: "Knowledge Check" | "Assessment";
 }) {
   const { user } = useAuth();
   const [shuffleSeed, setShuffleSeed] = useState(0);
@@ -245,7 +248,7 @@ export default function QuizEngine({
   // avoid a flash of quiz content for a user who is actually locked out.
   if (!lockoutChecked) return null;
   if (lockoutStatus?.locked && lockoutStatus.lockedUntil) {
-    return <LockoutScreen lockedUntil={lockoutStatus.lockedUntil} />;
+    return <LockoutScreen lockedUntil={lockoutStatus.lockedUntil} label={label} />;
   }
 
   if (finished) {
@@ -273,7 +276,7 @@ export default function QuizEngine({
             </p>
           ) : justLockedOut ? (
             <p className="mt-4 text-sm text-[var(--error)]">
-              That's 3 misses in a row — this quiz is now locked for 24 hours. Review the
+              That&apos;s 3 misses in a row — this {label.toLowerCase()} is now locked for 24 hours. Review the
               subtopics before your next attempt.
             </p>
           ) : (
@@ -320,7 +323,7 @@ export default function QuizEngine({
                   onClick={retake}
                   className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-5 py-2.5 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
                 >
-                  Retake Quiz
+                  Retake {label}
                 </button>
                 {nextHref && passed && (
                   <Link
@@ -350,7 +353,7 @@ export default function QuizEngine({
       {lockoutStatus && lockoutStatus.failStreak > 0 && lockoutStatus.failStreak < 3 && (
         <p className="rounded-md border border-[var(--error)]/30 bg-[var(--error-soft)] px-3 py-2 text-center text-xs text-[var(--error)]">
           ⚠️ {lockoutStatus.failStreak} missed attempt{lockoutStatus.failStreak === 1 ? "" : "s"} in a row —{" "}
-          {3 - lockoutStatus.failStreak} more and this quiz locks for 24 hours.
+          {3 - lockoutStatus.failStreak} more and this {label.toLowerCase()} locks for 24 hours.
         </p>
       )}
       <div className="flex items-center justify-between text-xs text-[var(--text-lo)]">

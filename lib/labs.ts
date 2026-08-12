@@ -8,6 +8,9 @@ export type Lab = {
   title: string;
   tag: string;
   summary: string;
+  /** Optional CMS curriculum placement; standalone /labs routes remain valid. */
+  relatedCourseSlug?: string;
+  relatedTopicSlug?: string;
   objective: string;
   prerequisites: string[];
   steps: LabStep[];
@@ -21,6 +24,8 @@ export const labs: Lab[] = [
     title: "Configure a BAQ-based customer combo",
     tag: "data-binding",
     summary: "Order Entry Detail page, zCustomer01 BAQ, filtered by a State textbox.",
+    relatedCourseSlug: "kinetic-application-studio",
+    relatedTopicSlug: "dataviews-widgets-panels",
     objective:
       "Add a ComboBox to Order Entry's Detail page that lists customers from the zCustomer01 BAQ, with an additional State column and a live textbox filter — reinforcing everything from the Components & Layout and DataViews modules.",
     prerequisites: [
@@ -69,4 +74,10 @@ export const labs: Lab[] = [
 
 export function getLab(slug: string) {
   return labs.find((l) => l.slug === slug);
+}
+
+export function getLabsForTopic(courseSlug: string, topicSlug: string) {
+  return labs.filter(
+    (lab) => lab.relatedCourseSlug === courseSlug && lab.relatedTopicSlug === topicSlug
+  );
 }

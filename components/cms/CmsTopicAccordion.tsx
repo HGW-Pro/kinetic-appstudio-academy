@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "../AuthProvider";
 import { supabase } from "../../lib/supabaseClient";
 import { cmsModuleSlug } from "../../lib/cms/shared";
 import { loadLocalProgress, loadRemoteProgress, enrollInModule, type ProgressState } from "../../lib/progress";
+import { getLabsForTopic } from "../../lib/labs";
 import TopicOverview from "../learning/TopicOverview";
 
 type Course = { id: string; title: string; slug: string; description: string | null };
@@ -118,6 +120,7 @@ export default function CmsTopicAccordion({ courseSlug, topicSlug }: { courseSlu
     : [];
   const displayObjectives = objectives.length > 0 ? objectives : orderedLessons.map((lesson) => lesson.title);
   const challengeLesson = subtopics.find((subtopic) => hasChallengeBlock(subtopic.content_json));
+  const relatedLabs = course && topic ? getLabsForTopic(course.slug, topic.slug) : [];
 
   async function handleContinue() {
     if (!user || !firstIncomplete || !topic) return;
@@ -162,6 +165,7 @@ export default function CmsTopicAccordion({ courseSlug, topicSlug }: { courseSlu
         isCertified={Boolean(progress[moduleSlug]?.completedAt)}
         onContinue={handleContinue}
         isContinuing={continuing}
+        practicalMilestone={relatedLabs.length > 0 ? <div className="space-y-3"><div><p className="text-xs font-semibold uppercase tracking-[0.13em] text-[var(--primary)]">Practical milestone</p><h2 className="mt-1 text-lg font-semibold text-[var(--text-hi)]">Put this topic into practice</h2><p className="mt-1 text-sm text-[var(--text-mid)]">Build a working Kinetic customization after completing the guided lessons.</p></div><div className="flex flex-wrap gap-3">{relatedLabs.map((lab) => <Link key={lab.slug} href={`/labs/${lab.slug}`} className="inline-flex min-h-10 items-center rounded-md bg-[var(--primary)] px-4 py-2 text-sm font-semibold text-white hover:bg-[var(--primary-dark)]">🧪 {lab.title} →</Link>)}</div></div> : undefined}
         challenge={challengeLesson ? <><p className="text-xs font-semibold uppercase tracking-[0.13em] text-[var(--accent)]">Practical challenge</p><h2 className="mt-1 text-lg font-semibold text-[var(--text-hi)]">{challengeLesson.title}</h2><p className="mt-1 text-sm text-[var(--text-mid)]">Apply this topic&apos;s concepts in a hands-on challenge.</p></> : undefined}
       />
     </>
