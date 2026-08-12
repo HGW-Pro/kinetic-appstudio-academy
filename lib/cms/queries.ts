@@ -3,11 +3,6 @@ import { createSupabaseServerClient } from "../supabase/server";
 import type { CourseRecord, TopicRecord, SubtopicRecord, QuizRecord } from "../admin/types";
 import { cmsModuleSlug } from "./shared";
 
-// Read-only fetchers for the PUBLIC student-facing side of the CMS. Only
-// published courses (is_published = true) are ever returned to public
-// callers -- admin views bypass this by querying the tables directly via
-// createSupabaseServerClient() with the admin's own authenticated session.
-
 export async function getPublicCourses(): Promise<CourseRecord[]> {
   const supabase = createSupabaseServerClient();
   const { data, error } = await supabase
@@ -128,8 +123,6 @@ export async function getPublicQuizzesForSubtopics(subtopicIds: string[]): Promi
   return map;
 }
 
-// Alias matching the exact name requested for wiring into the main course
-// catalog page: getCmsCourses() === getPublicCourses().
 export const getCmsCourses = getPublicCourses;
 
 export interface CmsCourseWithStats extends CourseRecord {
@@ -138,9 +131,6 @@ export interface CmsCourseWithStats extends CourseRecord {
   quizQuestionCount: number;
 }
 
-// Same published-only course list as getCmsCourses(), but enriched with
-// topic/subtopic/quiz-question counts -- mirrors the metadata row the
-// premium course card already displays for the legacy hardcoded courses.
 export async function getCmsCoursesWithStats(): Promise<CmsCourseWithStats[]> {
   const supabase = createSupabaseServerClient();
   const courses = await getPublicCourses();
@@ -203,16 +193,6 @@ export interface CmsTopicWithStats {
   quizQuestionCount: number;
 }
 
-// Topics for a course, enriched with the same metrics the legacy hardcoded
-// topic cards show (subtopic count, estimated duration, quiz question
-// count) so dynamic Supabase-backed courses render identical rich cards
-// instead of a plain numbered list.
-//
-// Graceful fallbacks: difficulty defaults to "Standard" when null (the
-// topics.difficulty column is nullable by design); estMinutes defaults to
-// ~5 minutes per subtopic when topics.est_minutes hasn't been set -- the
-// metrics bar always renders something rather than disappearing just
-// because a topic hasn't been backfilled with that metadata yet.
 export async function getPublicTopicsWithStats(courseId: string): Promise<CmsTopicWithStats[]> {
   const supabase = createSupabaseServerClient();
 
@@ -266,6 +246,81 @@ export async function getPublicTopicsWithStats(courseId: string): Promise<CmsTop
       quizQuestionCount,
     };
   });
+}
+
+export interface CmsTopicDetail {
+  topic: CmsTopicWithStats;
+  topicCount: number;
+  subtopics: { id: string; title: string; sequence_order: number; estMinutes: number }[];
+  quizQuestionCount: number;
+}
+
+// Full detail for a single topic page: the topic itself (with difficulty/
+// duration fallbacks), how many topics total exist in its course (for the
+// "Topic X of Y" breadcrumb), every subtopic with its own duration, and
+// the total quiz question count aggregated across all of that topic's
+// subtopics' linked quizzes -- everything the premium topic overview UI
+// needs in one call.
+export async function getPublicTopicDetail(courseId: string, topicSlug: string): Promise<CmsTopicDetail | null> {
+  const supabase = createSupabaseServerClient();
+
+  const { data: allTopics, error: topicsErr } = await supabase
+    .from("topics")
+    .select("id, title, slug, sequence_order, difficulty")
+    .eq("course_id", courseId)
+    .order("sequence_order", { ascending: true });
+
+  if (topicsErr || !allTopics) {
+    if (topicsErr) console.error("getPublicTopicDetail failed", topicsErr);
+    return null;
+  }
+
+  const topicRow = allTopics.find((t) => t.slug === topicSlug);
+  if (!topicRow) return null;
+
+  const { data: subtopics } = await supabase
+    .from("subtopics")
+    .select("id, title, sequence_order, est_minutes")
+    .eq("topic_id", topicRow.id)
+    .order("sequence_order", { ascending: true });
+
+  const subtopicRows = (subtopics ?? []).map((s) => ({
+    id: s.id,
+    title: s.title,
+    sequence_order: s.sequence_order,
+    estMinutes: s.est_minutes && s.est_minutes > 0 ? s.est_minutes : 5,
+  }));
+
+  const subtopicIds = subtopicRows.map((s) => s.id);
+  let quizQuestionCount = 0;
+  if (subtopicIds.length > 0) {
+    const { data: quizzes } = await supabase
+      .from("quizzes")
+      .select("questions_json")
+      .in("subtopic_id", subtopicIds);
+    quizQuestionCount = (quizzes ?? []).reduce(
+      (sum, q) => sum + (Array.isArray(q.questions_json) ? q.questions_json.length : 0),
+      0
+    );
+  }
+
+  const totalSubtopicCount = subtopicRows.length;
+
+  return {
+    topic: {
+      id: topicRow.id,
+      title: topicRow.title,
+      slug: topicRow.slug,
+      sequence_order: topicRow.sequence_order,
+      difficulty: topicRow.difficulty && String(topicRow.difficulty).trim() ? String(topicRow.difficulty) : "Standard",
+      estMinutes: Math.max(subtopicRows.reduce((sum, s) => sum + s.estMinutes, 0), 5),
+      subtopicCount: totalSubtopicCount,
+      quizQuestionCount,
+    },
+    topicCount: allTopics.length,
+    subtopics: subtopicRows,
+    quizQuestionCount,
+  };
 }
 
 export { cmsModuleSlug };

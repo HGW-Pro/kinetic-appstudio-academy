@@ -19,11 +19,14 @@ interface CmsSubtopicRow {
   id: string;
   title: string;
   sequence_order: number;
+  estMinutes: number;
 }
 interface CmsTopicRow {
   id: string;
   title: string;
   slug: string;
+  sequence_order: number;
+  difficulty: string;
 }
 interface CmsCourseRow {
   id: string;
@@ -49,8 +52,9 @@ export default function TopicPage({
   const [cmsChecked, setCmsChecked] = useState(false);
   const [cmsCourse, setCmsCourse] = useState<CmsCourseRow | null>(null);
   const [cmsTopic, setCmsTopic] = useState<CmsTopicRow | null>(null);
+  const [cmsTopicCount, setCmsTopicCount] = useState(0);
   const [cmsSubtopics, setCmsSubtopics] = useState<CmsSubtopicRow[]>([]);
-  const [cmsHasQuiz, setCmsHasQuiz] = useState(false);
+  const [cmsQuizQuestionCount, setCmsQuizQuestionCount] = useState(0);
 
   const cmsSlug = cmsCourse && cmsTopic ? cmsModuleSlug(cmsCourse.slug, cmsTopic.slug) : null;
   const moduleSlug = legacyTopic ? legacyTopic.slug : cmsSlug;
@@ -79,30 +83,52 @@ export default function TopicPage({
         return;
       }
       setCmsCourse(course);
-      const { data: topic } = await supabase
+
+      const { data: allTopics } = await supabase
         .from("topics")
-        .select("id, title, slug")
+        .select("id, title, slug, sequence_order, difficulty")
         .eq("course_id", course.id)
-        .eq("slug", params.topicSlug)
-        .maybeSingle();
+        .order("sequence_order", { ascending: true });
+      setCmsTopicCount((allTopics ?? []).length);
+
+      const topic = (allTopics ?? []).find((t) => t.slug === params.topicSlug);
       if (!topic) {
         setCmsChecked(true);
         return;
       }
-      setCmsTopic(topic);
+      setCmsTopic({
+        id: topic.id,
+        title: topic.title,
+        slug: topic.slug,
+        sequence_order: topic.sequence_order,
+        difficulty: topic.difficulty && String(topic.difficulty).trim() ? String(topic.difficulty) : "Standard",
+      });
+
       const { data: subtopics } = await supabase
         .from("subtopics")
-        .select("id, title, sequence_order")
+        .select("id, title, sequence_order, est_minutes")
         .eq("topic_id", topic.id)
         .order("sequence_order", { ascending: true });
-      setCmsSubtopics(subtopics ?? []);
-      const subtopicIds = (subtopics ?? []).map((s) => s.id);
+
+      const subtopicRows: CmsSubtopicRow[] = (subtopics ?? []).map((s) => ({
+        id: s.id,
+        title: s.title,
+        sequence_order: s.sequence_order,
+        estMinutes: s.est_minutes && s.est_minutes > 0 ? s.est_minutes : 5,
+      }));
+      setCmsSubtopics(subtopicRows);
+
+      const subtopicIds = subtopicRows.map((s) => s.id);
       if (subtopicIds.length > 0) {
         const { data: quizzes } = await supabase
           .from("quizzes")
-          .select("subtopic_id")
+          .select("questions_json")
           .in("subtopic_id", subtopicIds);
-        setCmsHasQuiz((quizzes ?? []).length > 0);
+        const total = (quizzes ?? []).reduce(
+          (sum, q) => sum + (Array.isArray(q.questions_json) ? q.questions_json.length : 0),
+          0
+        );
+        setCmsQuizQuestionCount(total);
       }
       setCmsChecked(true);
     })();
@@ -300,88 +326,143 @@ export default function TopicPage({
 
   const doneIds = progress[moduleSlug!]?.lessonsCompleted ?? [];
   const highestUnlocked = user ? Math.min(doneIds.length, cmsSubtopics.length - 1) : 0;
+  const allDone = cmsSubtopics.length > 0 && doneIds.length >= cmsSubtopics.length;
+  const isCertified = !!progress[moduleSlug!]?.completedAt;
+  const totalEstMinutes = cmsSubtopics.reduce((sum, s) => sum + s.estMinutes, 0);
+  const firstIncompleteId =
+    cmsSubtopics.find((s) => !doneIds.includes(s.id))?.id ?? cmsSubtopics[cmsSubtopics.length - 1]?.id;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <Link href={`/courses/${params.courseSlug}`} className="text-sm text-[var(--text-lo)] hover:text-[var(--primary)]">
-          ← {cmsCourse.title}
-        </Link>
-        <h1 className="mt-1 text-2xl font-bold text-[var(--text-hi)]">{cmsTopic.title}</h1>
+    <div className="space-y-8">
+      <div className="glass-card glow-border rounded-2xl p-8">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-4xl">📘</span>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-[var(--primary)]">
+                Topic {cmsTopic.sequence_order + 1} of {cmsTopicCount} · {cmsTopic.difficulty}
+              </p>
+              <h1 className="text-2xl font-bold text-[var(--text-hi)] sm:text-3xl">{cmsTopic.title}</h1>
+            </div>
+          </div>
+
+          {user ? (
+            <div className="flex flex-col items-end gap-1">
+              <button
+                onClick={handleEnroll}
+                disabled={enrolling || enrolled}
+                className={`rounded-md px-4 py-2 text-sm font-semibold shadow-sm transition ${
+                  enrolled
+                    ? "cursor-default bg-[var(--success-soft)] text-[var(--success)]"
+                    : "bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)]"
+                }`}
+              >
+                {enrolled ? "Enrolled ✓" : enrolling ? "Enrolling…" : "Enroll in Topic"}
+              </button>
+              {enrollError && (
+                <p className="max-w-xs text-right text-xs text-[var(--error)]">⚠️ {enrollError}</p>
+              )}
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
+            >
+              Sign in to enroll
+            </Link>
+          )}
+        </div>
+
+        <div className="mt-5 flex flex-wrap gap-3 text-xs text-[var(--text-lo)]">
+          <span className="badge-pill">{cmsSubtopics.length} subtopics</span>
+          <span className="badge-pill">{totalEstMinutes} min</span>
+          <span className="badge-pill">{cmsQuizQuestionCount}-question assignment</span>
+          {isCertified && <span className="badge-pill">🏆 Certified</span>}
+        </div>
+        {!enrolled && user && (
+          <p className="mt-4 rounded-lg border border-[var(--primary)]/20 bg-[var(--primary)]/[0.05] px-4 py-3 text-xs text-[var(--text-mid)]">
+            💡 You must enroll before you can open any subtopic below or take the assignment.
+          </p>
+        )}
       </div>
 
-      <div className="glass-card flex flex-wrap items-center justify-between gap-3 rounded-xl p-5">
-        <div className="text-sm text-[var(--text-mid)]">
-          {cmsSubtopics.length} subtopic{cmsSubtopics.length === 1 ? "" : "s"}
-          {cmsHasQuiz && " · includes assignment"}
+      <div className="glass-card rounded-2xl p-6">
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-[var(--primary)]">
+          Subtopics
+        </h2>
+        <div className="space-y-2">
+          {cmsSubtopics.map((s, i) => {
+            const done = doneIds.includes(s.id);
+            const locked = ready && (i > highestUnlocked || !enrolled);
+            const row = (
+              <div
+                className={`flex items-center justify-between rounded-lg border px-4 py-3 transition ${
+                  locked
+                    ? "border-[var(--border)] bg-[var(--surface-2)] opacity-60"
+                    : "border-[var(--border-strong)] bg-[var(--surface)] hover:bg-[var(--surface-2)]"
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <span
+                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+                      done
+                        ? "bg-gradient-to-br from-[var(--primary)] to-[var(--primary-light)] text-white"
+                        : locked
+                        ? "bg-[var(--surface-3)] text-[var(--text-lo)]"
+                        : "border border-[var(--primary)] text-[var(--primary)]"
+                    }`}
+                  >
+                    {done ? "✓" : locked ? "🔒" : i + 1}
+                  </span>
+                  <span className="text-sm font-medium text-[var(--text-hi)]">{s.title}</span>
+                </div>
+                <span className="text-xs text-[var(--text-lo)]">{s.estMinutes} min</span>
+              </div>
+            );
+            return locked ? (
+              <div key={s.id}>{row}</div>
+            ) : (
+              <Link key={s.id} href={`/courses/${params.courseSlug}/${params.topicSlug}/${s.id}`}>
+                {row}
+              </Link>
+            );
+          })}
+          {cmsSubtopics.length === 0 && (
+            <p className="rounded-lg border border-dashed border-[var(--border-strong)] px-4 py-6 text-center text-sm text-[var(--text-lo)]">
+              No subtopics published yet.
+            </p>
+          )}
         </div>
-        {user ? (
-          <div className="flex flex-col items-end gap-1">
-            <button
-              onClick={handleEnroll}
-              disabled={enrolling || enrolled}
-              className={`rounded-md px-4 py-2 text-sm font-semibold shadow-sm transition ${
-                enrolled
-                  ? "cursor-default bg-[var(--success-soft)] text-[var(--success)]"
-                  : "bg-[var(--primary)] text-white hover:bg-[var(--primary-dark)]"
-              }`}
-            >
-              {enrolled ? "Enrolled ✓" : enrolling ? "Enrolling…" : "Enroll in Topic"}
-            </button>
-            {enrollError && <p className="max-w-xs text-right text-xs text-[var(--error)]">⚠️ {enrollError}</p>}
-          </div>
-        ) : (
+
+        {enrolled && firstIncompleteId && (
           <Link
-            href="/login"
-            className="rounded-md border border-[var(--border-strong)] bg-[var(--surface-2)] px-4 py-2 text-sm font-semibold text-[var(--text-hi)] transition hover:bg-[var(--surface-3)]"
+            href={`/courses/${params.courseSlug}/${params.topicSlug}/${firstIncompleteId}`}
+            className="mt-5 inline-block rounded-md bg-[var(--primary)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
           >
-            Sign in to enroll
+            {doneIds.length === 0 ? "Start Topic →" : allDone ? "Review Subtopics →" : "Continue Learning →"}
           </Link>
         )}
       </div>
 
-      {!enrolled && user && (
-        <p className="rounded-lg border border-[var(--primary)]/20 bg-[var(--primary)]/[0.05] px-4 py-3 text-xs text-[var(--text-mid)]">
-          💡 You must enroll before you can open any subtopic below.
+      <div className="glass-card rounded-2xl p-6 text-center">
+        <h2 className="text-lg font-semibold text-[var(--text-hi)]">Ready to test your knowledge?</h2>
+        <p className="mt-1 text-sm text-[var(--text-mid)]">
+          {allDone
+            ? `Score 80%+ on the ${cmsQuizQuestionCount}-question assignment to earn this topic's badge and unlock the next.`
+            : "Finish every subtopic above first."}
         </p>
-      )}
-
-      <div className="space-y-2">
-        {cmsSubtopics.map((s, i) => {
-          const done = doneIds.includes(s.id);
-          const locked = ready && (i > highestUnlocked || !enrolled);
-          const row = (
-            <div
-              className={`flex items-center justify-between rounded-lg border px-4 py-3 transition ${
-                locked
-                  ? "border-[var(--border)] bg-[var(--surface-2)] opacity-60"
-                  : "border-[var(--border-strong)] bg-[var(--surface)] hover:bg-[var(--surface-2)]"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <span
-                  className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
-                    done
-                      ? "bg-gradient-to-br from-[var(--primary)] to-[var(--primary-light)] text-white"
-                      : locked
-                      ? "bg-[var(--surface-3)] text-[var(--text-lo)]"
-                      : "border border-[var(--primary)] text-[var(--primary)]"
-                  }`}
-                >
-                  {done ? "✓" : locked ? "🔒" : i + 1}
-                </span>
-                <span className="text-sm font-medium text-[var(--text-hi)]">{s.title}</span>
-              </div>
-            </div>
-          );
-          return locked ? (
-            <div key={s.id}>{row}</div>
-          ) : (
-            <Link key={s.id} href={`/courses/${params.courseSlug}/${params.topicSlug}/${s.id}`}>
-              {row}
-            </Link>
-          );
-        })}
+        {allDone && cmsQuizQuestionCount > 0 ? (
+          <Link
+            href={`/courses/${params.courseSlug}/${params.topicSlug}/quiz`}
+            className="mt-5 inline-block rounded-md bg-[var(--primary)] px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
+          >
+            Take the Assignment →
+          </Link>
+        ) : (
+          <span className="mt-5 inline-block rounded-md bg-[var(--surface-2)] px-6 py-3 text-sm font-semibold text-[var(--text-lo)]">
+            Locked
+          </span>
+        )}
       </div>
     </div>
   );
