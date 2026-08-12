@@ -3,9 +3,6 @@
 
 export type ContentBlockType = "SlideText" | "VisualMockup" | "FlowDiagram";
 
-// SlideText.body is an ORDERED array of nodes rather than a flat string[]
-// with a separate images[] array, so an image can be placed after a
-// specific paragraph instead of always being grouped at the end.
 export interface ParagraphNode {
   type: "paragraph";
   text: string;
@@ -85,8 +82,6 @@ export interface QuizRecord {
   updated_at: string;
 }
 
-// ---------- Bulk import payload shape (single course) ----------
-
 export interface BulkImportSubtopic {
   title: string;
   sequence_order?: number;
@@ -111,8 +106,6 @@ export interface BulkImportPayload {
   };
   topics: BulkImportTopic[];
 }
-
-// ---------- Validation ----------
 
 export class ValidationError extends Error {
   public readonly path: string;
@@ -340,7 +333,6 @@ export function validateBulkImportPayload(raw: unknown): BulkImportPayload {
   return { course, topics };
 }
 
-// ---------- Shuffle helpers ----------
 function shuffle<T>(arr: T[]): T[] {
   const copy = [...arr];
   for (let i = copy.length - 1; i > 0; i--) {
@@ -373,8 +365,6 @@ export function shuffleBulkImportPayload(payload: BulkImportPayload): BulkImport
     })),
   };
 }
-
-// ---------- Multi-course bulk import ----------
 
 export interface MultiCourseBulkImportPayload {
   courses: BulkImportPayload[];
@@ -447,17 +437,6 @@ export function resolveImagesInMultiPayload(
   return { courses: payload.courses.map((c) => resolveImagesInPayload(c, supabaseUrl)) };
 }
 
-// ---------- Backward-compatible normalization ----------
-// Subtopics migrated before the SlideText.body schema changed from a flat
-// string[] to an ordered SlideNode[] still have old-shape data sitting in
-// the database (content_json body items are plain strings, not
-// {type:"paragraph"|"image"} objects). Without this, the admin editor's
-// SlideTextEditor sees `node.type` as undefined on every item, fails to
-// match "paragraph", falls through to rendering it as a broken image block
-// with empty fields — which is exactly why previously-migrated subtopics
-// appeared completely empty in the editor. This normalizes on load so old
-// records display correctly; saving through the editor afterward persists
-// them in the current correct shape, self-healing the record permanently.
 export function normalizeContentBlocks(blocks: unknown): ContentBlock[] {
   if (!Array.isArray(blocks)) return [];
   return blocks.map((block): ContentBlock => {
@@ -548,4 +527,110 @@ export function normalizeContentBlocks(blocks: unknown): ContentBlock[] {
 
     return { type: "SlideText", body: [{ type: "paragraph", text: "" }] };
   });
+}
+
+// ---------- Append topics/modules into an EXISTING course ----------
+// Distinct from BulkImportPayload (which always creates a brand-new
+// course): this validates just an array of topics/modules meant to be
+// inserted into a course that already exists, identified by its slug.
+
+export interface AppendTopicsPayload {
+  courseSlug: string;
+  topics: BulkImportTopic[];
+}
+
+export function validateAppendTopicsPayload(raw: unknown): AppendTopicsPayload {
+  if (typeof raw !== "object" || raw === null) {
+    throw new ValidationError("root", "payload must be a JSON object");
+  }
+  const r = raw as Record<string, unknown>;
+  const courseSlug = assertSlug(r.courseSlug, "courseSlug");
+  const topicsRaw = assertArray(r.topics, "topics");
+  if (topicsRaw.length === 0) {
+    throw new ValidationError("topics", "must contain at least one topic");
+  }
+  const topics: BulkImportTopic[] = topicsRaw.map((t, ti) => {
+    if (typeof t !== "object" || t === null) throw new ValidationError(`topics[${ti}]`, "must be an object");
+    const tt = t as Record<string, unknown>;
+    const subtopicsRaw = assertArray(tt.subtopics ?? [], `topics[${ti}].subtopics`);
+    if (subtopicsRaw.length === 0) {
+      throw new ValidationError(`topics[${ti}].subtopics`, "must contain at least one subtopic");
+    }
+    const subtopics: BulkImportSubtopic[] = subtopicsRaw.map((s, si) => {
+      if (typeof s !== "object" || s === null) {
+        throw new ValidationError(`topics[${ti}].subtopics[${si}]`, "must be an object");
+      }
+      const ss = s as Record<string, unknown>;
+      const contentRaw = assertArray(ss.content_json ?? [], `topics[${ti}].subtopics[${si}].content_json`);
+      if (contentRaw.length === 0) {
+        throw new ValidationError(
+          `topics[${ti}].subtopics[${si}].content_json`,
+          "must contain at least one content block"
+        );
+      }
+      const content_json = contentRaw.map((block, bi) =>
+        validateContentBlock(block, `topics[${ti}].subtopics[${si}].content_json[${bi}]`)
+      );
+      let quiz: BulkImportSubtopic["quiz"];
+      if (ss.quiz !== undefined) {
+        if (typeof ss.quiz !== "object" || ss.quiz === null) {
+          throw new ValidationError(`topics[${ti}].subtopics[${si}].quiz`, "must be an object");
+        }
+        const qz = ss.quiz as Record<string, unknown>;
+        const questionsRaw = assertArray(qz.questions_json ?? [], `topics[${ti}].subtopics[${si}].quiz.questions_json`);
+        quiz = {
+          questions_json: questionsRaw.map((q, qi) =>
+            validateQuizQuestion(q, `topics[${ti}].subtopics[${si}].quiz.questions_json[${qi}]`)
+          ),
+        };
+      }
+      return {
+        title: assertString(ss.title, `topics[${ti}].subtopics[${si}].title`, { minLen: 1 }),
+        sequence_order: ss.sequence_order !== undefined ? assertNumber(ss.sequence_order, `topics[${ti}].subtopics[${si}].sequence_order`) : undefined,
+        content_json,
+        quiz,
+      };
+    });
+    return {
+      title: assertString(tt.title, `topics[${ti}].title`, { minLen: 1 }),
+      slug: assertSlug(tt.slug, `topics[${ti}].slug`),
+      sequence_order: tt.sequence_order !== undefined ? assertNumber(tt.sequence_order, `topics[${ti}].sequence_order`) : undefined,
+      subtopics,
+    };
+  });
+  return { courseSlug, topics };
+}
+
+export function shuffleAppendTopicsPayload(payload: AppendTopicsPayload): AppendTopicsPayload {
+  return {
+    ...payload,
+    topics: payload.topics.map((t) => ({
+      ...t,
+      subtopics: t.subtopics.map((s) => ({
+        ...s,
+        quiz: s.quiz ? { questions_json: shuffleQuestions(s.quiz.questions_json) } : undefined,
+      })),
+    })),
+  };
+}
+
+export function resolveImagesInAppendPayload(payload: AppendTopicsPayload, supabaseUrl: string): AppendTopicsPayload {
+  return {
+    ...payload,
+    topics: payload.topics.map((t) => ({
+      ...t,
+      subtopics: t.subtopics.map((s) => ({
+        ...s,
+        content_json: s.content_json.map((block) => {
+          if (block.type !== "SlideText") return block;
+          return {
+            ...block,
+            body: block.body.map((node) =>
+              node.type === "image" ? { ...node, src: resolveImageSrc(node.src, supabaseUrl) } : node
+            ),
+          };
+        }),
+      })),
+    })),
+  };
 }

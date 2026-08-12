@@ -4,6 +4,7 @@ import { createSupabaseServerClient } from "../../../../lib/supabase/server";
 import type { CourseRecord, TopicRecord, SubtopicRecord, QuizRecord } from "../../../../lib/admin/types";
 import CourseForm from "../../../../components/admin/CourseForm";
 import CourseDetailClient from "../../../../components/admin/CourseDetailClient";
+import RecoverMissingModulesButton from "../../../../components/admin/RecoverMissingModulesButton";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,10 @@ export default async function AdminCourseDetailPage({ params }: { params: { cour
       <section className="space-y-3">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Course Details</h2>
         <CourseForm course={course} />
+      </section>
+
+      <section className="space-y-3">
+        <RecoverMissingModulesButton courseSlug={course.slug} />
       </section>
 
       <section className="space-y-3">

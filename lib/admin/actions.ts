@@ -371,7 +371,7 @@ export async function upsertQuiz(
   }
 }
 
-// ---------------- Bulk import: single course (legacy, still used by any old callers) ----------------
+// ---------------- Bulk import: single course (legacy) ----------------
 
 export async function bulkImportCourse(rawJson: string): Promise<ActionResult<{ courseId: string }>> {
   try {
@@ -402,10 +402,7 @@ export async function bulkImportCourse(rawJson: string): Promise<ActionResult<{ 
   }
 }
 
-// ---------------- Bulk import: multiple courses in one paste ----------------
-// Each course imports independently server-side (see the
-// admin_bulk_import_courses Postgres function) — one malformed course
-// doesn't block the others, and the caller gets back a per-course report.
+// ---------------- Bulk import: multiple NEW courses in one paste ----------------
 
 export async function bulkImportCourses(rawJson: string): Promise<
   ActionResult<{ imported: { title: string; id: string }[]; errors: { title: string; error: string }[] }>
@@ -448,6 +445,195 @@ export async function bulkImportCourses(rawJson: string): Promise<
     }
 
     return { ok: true, data: result };
+  } catch (err) {
+    return actionError(err);
+  }
+}
+
+// ---------------- Append topics/modules into an EXISTING course ----------------
+
+export async function appendTopicsToCourse(rawJson: string): Promise<
+  ActionResult<{ courseId: string; imported: { title: string; id: string }[]; errors: { title: string; error: string }[] }>
+> {
+  try {
+    await assertAdminOrThrow();
+    const supabase = createSupabaseServerClient();
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(rawJson);
+    } catch {
+      return { ok: false, error: "The pasted text is not valid JSON." };
+    }
+
+    const { validateAppendTopicsPayload, resolveImagesInAppendPayload, shuffleAppendTopicsPayload } = await import(
+      "./types"
+    );
+
+    const payload = validateAppendTopicsPayload(parsed);
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const resolved = resolveImagesInAppendPayload(payload, supabaseUrl);
+    const shuffled = shuffleAppendTopicsPayload(resolved);
+
+    const { data, error } = await supabase.rpc("admin_bulk_import_topics_into_course", {
+      p_course_slug: shuffled.courseSlug,
+      payload: { topics: shuffled.topics },
+    });
+
+    if (error) {
+      return { ok: false, error: `Import failed: ${error.message}` };
+    }
+
+    const result = data as {
+      course_id: string;
+      imported: { title: string; id: string }[];
+      errors: { title: string; error: string }[];
+    };
+
+    revalidatePath("/admin/courses");
+    revalidatePath(`/admin/courses/${result.course_id}`);
+    revalidatePath("/courses");
+    revalidatePath("/library");
+
+    if (result.imported.length === 0) {
+      return {
+        ok: false,
+        error: `No topics were imported.\n${result.errors.map((e) => `"${e.title}": ${e.error}`).join("\n")}`,
+        data: { courseId: result.course_id, imported: [], errors: result.errors },
+      };
+    }
+
+    return { ok: true, data: { courseId: result.course_id, imported: result.imported, errors: result.errors } };
+  } catch (err) {
+    return actionError(err);
+  }
+}
+
+// ---------------- One-time recovery: import any legacy modules missing from the CMS ----------------
+
+export async function importMissingModulesIntoCourse(
+  targetCourseSlug: string
+): Promise<ActionResult<{ imported: string[]; skipped: string[]; warnings: string[] }>> {
+  try {
+    await assertAdminOrThrow();
+    const supabase = createSupabaseServerClient();
+
+    const { data: courseRow, error: courseErr } = await supabase
+      .from("courses")
+      .select("id")
+      .eq("slug", targetCourseSlug)
+      .maybeSingle();
+    if (courseErr || !courseRow) {
+      return { ok: false, error: `Course with slug "${targetCourseSlug}" not found.` };
+    }
+
+    const { data: existingTopics, error: topicsErr } = await supabase
+      .from("topics")
+      .select("slug")
+      .eq("course_id", courseRow.id);
+    if (topicsErr) {
+      return { ok: false, error: topicsErr.message };
+    }
+    const existingSlugs = new Set((existingTopics ?? []).map((t) => t.slug));
+
+    const warnings: string[] = [];
+    const imported: string[] = [];
+    const skipped: string[] = [];
+
+    let legacyModules: any[] | undefined;
+    try {
+      const allModulesMod: Record<string, unknown> = await import("../allModules");
+      const candidateArrays = Object.values(allModulesMod).filter((v) => Array.isArray(v)) as unknown[][];
+      legacyModules = candidateArrays.find((arr) =>
+        arr.every(
+          (m) =>
+            typeof m === "object" &&
+            m !== null &&
+            typeof (m as any).slug === "string" &&
+            typeof (m as any).title === "string" &&
+            Array.isArray((m as any).lessons)
+        )
+      ) as any[] | undefined;
+    } catch (err) {
+      return { ok: false, error: `lib/allModules.ts could not be loaded: ${err instanceof Error ? err.message : String(err)}` };
+    }
+
+    if (!legacyModules) {
+      return { ok: false, error: "lib/allModules.ts: no array export matched the expected module shape." };
+    }
+
+    const { validateAppendTopicsPayload, resolveImagesInAppendPayload, shuffleAppendTopicsPayload } = await import(
+      "./types"
+    );
+
+    function normalizeLegacyImage(img: Record<string, unknown>) {
+      const src = img.src ?? img.url ?? img.imageUrl ?? img.href ?? img.path;
+      if (typeof src !== "string" || !src.trim()) return null;
+      const alt = img.alt ?? img.title ?? img.caption ?? "Lesson image";
+      const caption = img.caption ?? img.description ?? img.title;
+      return { src, alt: typeof alt === "string" ? alt : "Lesson image", caption: typeof caption === "string" ? caption : undefined };
+    }
+
+    for (const mod of legacyModules) {
+      if (existingSlugs.has(mod.slug)) {
+        skipped.push(`${mod.title} (topic slug "${mod.slug}" already exists — not touched)`);
+        continue;
+      }
+
+      const subtopics = (mod.lessons ?? []).map((lesson: any, li: number) => {
+        const body: any[] = (lesson.body && lesson.body.length > 0 ? lesson.body : ["(no content)"]).map(
+          (text: string) => ({ type: "paragraph", text })
+        );
+        if (Array.isArray(lesson.images)) {
+          for (const raw of lesson.images) {
+            const norm = normalizeLegacyImage(raw);
+            if (norm) body.push({ type: "image", ...norm });
+            else warnings.push(`${mod.title} > "${lesson.title}": an image had no recognizable src/url — skipped.`);
+          }
+        }
+        if (lesson.mockup) warnings.push(`${mod.title} > "${lesson.title}": had a visual mockup, not migrated.`);
+        if (lesson.flow) warnings.push(`${mod.title} > "${lesson.title}": had a flow diagram, not migrated.`);
+        const isLast = li === (mod.lessons?.length ?? 1) - 1;
+        return {
+          title: lesson.title,
+          sequence_order: li,
+          content_json: [{ type: "SlideText", heading: lesson.title, body, proTip: lesson.proTip }],
+          quiz: isLast && mod.quiz?.length > 0 ? { questions_json: mod.quiz } : undefined,
+        };
+      });
+
+      try {
+        const payload = validateAppendTopicsPayload({
+          courseSlug: targetCourseSlug,
+          topics: [{ title: mod.title, slug: mod.slug, subtopics }],
+        });
+        const resolved = resolveImagesInAppendPayload(payload, process.env.NEXT_PUBLIC_SUPABASE_URL!);
+        const shuffled = shuffleAppendTopicsPayload(resolved);
+
+        const { data, error } = await supabase.rpc("admin_bulk_import_topics_into_course", {
+          p_course_slug: shuffled.courseSlug,
+          payload: { topics: shuffled.topics },
+        });
+
+        if (error) {
+          warnings.push(`FAILED to import "${mod.title}": ${error.message}`);
+          continue;
+        }
+        const result = data as { imported: { title: string }[]; errors: { title: string; error: string }[] };
+        if (result.errors.length > 0) {
+          warnings.push(`FAILED to import "${mod.title}": ${result.errors[0].error}`);
+        } else {
+          imported.push(mod.title);
+        }
+      } catch (err) {
+        warnings.push(`FAILED to import "${mod.title}": ${err instanceof ValidationError ? err.message : String(err)}`);
+      }
+    }
+
+    revalidatePath("/admin/courses");
+    revalidatePath("/library");
+
+    return { ok: true, data: { imported, skipped, warnings } };
   } catch (err) {
     return actionError(err);
   }
