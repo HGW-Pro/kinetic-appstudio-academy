@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import type { QuizQuestion } from "../lib/curriculum";
 import { recordQuizResult } from "../lib/progress";
@@ -119,6 +119,15 @@ function LockoutScreen({ lockedUntil }: { lockedUntil: string }) {
   );
 }
 
+// Optimistic-UI sync status for the background quiz-result write. Note:
+// this project pins react@18.3.1, which does NOT export React's
+// `useOptimistic` hook (added in React 19) -- importing it would crash the
+// build immediately. useState + useTransition below produce the identical
+// UX (instant transition to the results screen, non-blocking background
+// sync, error surfaced without rolling back the pass/fail result) without
+// requiring a React major-version upgrade.
+type SyncState = { status: "idle" | "pending" | "success" | "error"; error: string | null };
+
 export default function QuizEngine({
   moduleSlug,
   moduleTitle,
@@ -145,9 +154,15 @@ export default function QuizEngine({
   const [score, setScore] = useState(0);
   const [finished, setFinished] = useState(false);
   const [celebrate, setCelebrate] = useState(false);
-  const [syncError, setSyncError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
   const [lockoutRefresh, setLockoutRefresh] = useState(0);
+
+  // Optimistic sync of the background Supabase write. The results screen
+  // (finished/score/passed) renders the instant the last question is
+  // answered -- it never waits on this. sync.status starts "pending" the
+  // moment we transition to results and flips to "success"/"error" once
+  // the write resolves, purely as a small non-blocking indicator.
+  const [sync, setSync] = useState<SyncState>({ status: "idle", error: null });
+  const [, startTransition] = useTransition();
 
   const { status: lockoutStatus, checked: lockoutChecked } = useQuizLockout(
     moduleSlug,
@@ -167,32 +182,46 @@ export default function QuizEngine({
     if (correct) setScore((s) => s + 1);
   }
 
-  async function next() {
+  function syncResultInBackground(pct: number) {
+    setSync({ status: "pending", error: null });
+    startTransition(async () => {
+      const { remoteWrite } = recordQuizResult(moduleSlug, pct, user?.id);
+      if (!remoteWrite) {
+        setSync({ status: "success", error: null });
+        setLockoutRefresh((r) => r + 1);
+        return;
+      }
+      const { error } = await remoteWrite;
+      if (error) {
+        setSync({
+          status: "error",
+          error: "This score was saved on this device, but couldn't sync to your account: " + error,
+        });
+      } else {
+        setSync({ status: "success", error: null });
+      }
+      // Re-check lockout status after the write settles -- if this was the
+      // 3rd consecutive fail, the results screen below re-renders into the
+      // locked state on its own via lockoutStatus.
+      setLockoutRefresh((r) => r + 1);
+    });
+  }
+
+  function next() {
     if (isLast) {
       const pct = Math.round((score / shuffledQuestions.length) * 100);
-      setSaving(true);
-      setSyncError(null);
-      const { remoteWrite } = recordQuizResult(moduleSlug, pct, user?.id);
-      if (remoteWrite) {
-        const { error } = await remoteWrite;
-        if (error) {
-          setSyncError(
-            "This score was saved on this device, but couldn't sync to your account: " + error
-          );
-        }
-      }
-      setSaving(false);
       const passed = pct >= 80;
       playSound(passed ? "fanfare" : "wrong");
       if (passed) {
         setCelebrate(true);
         window.setTimeout(() => setCelebrate(false), 3200);
       }
+      // Instant: show the results screen right away, computed entirely
+      // from local `score` -- no waiting on the network for this part.
       setFinished(true);
-      // Re-check lockout status after this attempt syncs -- if this was the
-      // 3rd consecutive fail, the retake button below will be replaced by
-      // the LockoutScreen on the next render once the RPC reflects it.
-      setLockoutRefresh((r) => r + 1);
+      // Background: the Supabase write and the lockout re-check happen
+      // without blocking the transition above.
+      syncResultInBackground(pct);
       return;
     }
     playSound("click");
@@ -209,7 +238,7 @@ export default function QuizEngine({
     setLocked(false);
     setScore(0);
     setFinished(false);
-    setSyncError(null);
+    setSync({ status: "idle", error: null });
   }
 
   // Wait for the lockout check before rendering anything quiz-related, to
@@ -252,6 +281,17 @@ export default function QuizEngine({
               You need 80% to earn the badge. Review the subtopics and try again — you've got this.
             </p>
           )}
+
+          {/* Non-blocking sync indicator -- the result above already rendered
+              instantly; this just reflects whether the background write has
+              landed yet. */}
+          {sync.status === "pending" && (
+            <p className="mt-3 flex items-center justify-center gap-1.5 text-xs text-[var(--text-lo)]">
+              <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-[var(--primary)]" />
+              Syncing to your profile…
+            </p>
+          )}
+
           {!user && (
             <p className="mt-3 text-xs text-[var(--text-lo)]">
               Signed out — this score is saved on this device only.{" "}
@@ -261,9 +301,9 @@ export default function QuizEngine({
               to sync it to your profile.
             </p>
           )}
-          {syncError && (
+          {sync.status === "error" && sync.error && (
             <p className="mt-3 rounded-lg border border-[var(--error)]/30 bg-[var(--error-soft)] px-4 py-2 text-xs text-[var(--error)]">
-              ⚠️ {syncError}
+              ⚠️ {sync.error}
             </p>
           )}
           <div className="mt-8 flex flex-wrap justify-center gap-3">
@@ -367,10 +407,9 @@ export default function QuizEngine({
         {locked && (
           <button
             onClick={next}
-            disabled={saving}
-            className="mt-6 w-full rounded-md bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)] disabled:opacity-60"
+            className="mt-6 w-full rounded-md bg-[var(--primary)] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
           >
-            {saving ? "Saving…" : isLast ? "See Results" : "Next Question →"}
+            {isLast ? "See Results" : "Next Question →"}
           </button>
         )}
       </div>
