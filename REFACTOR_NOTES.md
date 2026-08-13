@@ -29,7 +29,7 @@ Phase 1 establishes the CMS as the primary student-facing curriculum source and 
 ## Phase 1 implementation plan
 
 1. Add isolated `components/academy/*` shell primitives (header, sidebar, mobile navigation, breadcrumbs, and non-functional search affordance) using existing CSS variables and no new dependencies.
-2. Add nested layouts for `/dashboard`, `/courses`, and `/labs`; use a root client chrome boundary so legacy/public/admin pages retain the existing NavBar/main/footer treatment and do not receive duplicate navigation.
+2. Add nested layouts for `/dashboard`, `/courses`, and `/labs`; use a root client chrome boundary so legacy/public/admin pages retain their main/footer treatment while academy routes use the dedicated academy shell.
 3. Add `/courses` as the canonical CMS catalog and make existing `/courses/[courseSlug]` and topic quiz lookup CMS-first, with legacy rendering retained only as a safety fallback.
 4. Run install, production build, and a short `/dashboard` development-server smoke check before committing.
 

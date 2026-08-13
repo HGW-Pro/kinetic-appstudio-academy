@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useAuth } from "../AuthProvider";
 import GlobalSearch from "./GlobalSearch";
 
@@ -14,18 +13,12 @@ function KineticMark() {
 }
 
 export default function AcademyHeader() {
-  const router = useRouter();
-  const { user, loading, signOut } = useAuth();
+  const { user, loading } = useAuth();
   const displayName =
     (typeof user?.user_metadata?.full_name === "string" && user.user_metadata.full_name) ||
     user?.email?.split("@")[0] ||
     "Learner";
   const initial = displayName.slice(0, 1).toUpperCase();
-
-  async function handleSignOut() {
-    await signOut();
-    router.push("/");
-  }
 
   return (
     <header className="sticky top-0 z-40 border-b border-[var(--border)] bg-[var(--surface)]/95 shadow-[0_1px_2px_rgba(16,24,40,0.03)] backdrop-blur">
@@ -58,15 +51,13 @@ export default function AcademyHeader() {
           {!loading && user ? (
             <div className="flex items-center gap-2">
               <span className="hidden max-w-28 truncate text-sm font-medium text-[var(--text-mid)] lg:block">{displayName}</span>
-              <button
-                type="button"
-                onClick={handleSignOut}
-                aria-label="Sign out"
-                title="Sign out"
-                className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--primary)] text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--primary-dark)]"
+              <span
+                aria-hidden="true"
+                title={displayName}
+                className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--primary)] text-sm font-semibold text-white shadow-sm"
               >
                 {initial}
-              </button>
+              </span>
             </div>
           ) : !loading ? (
             <Link

@@ -1,6 +1,5 @@
-// Theme dropdown removed at user request. Intentionally rendering null
-// rather than deleting this file/its import in NavBar.tsx, so removing the
-// dropdown doesn't require a second coordinated edit to NavBar.tsx.
+// Theme dropdown removed at user request. This no-op component remains for
+// compatibility with any callers that still import it.
 export default function ThemeToggle() {
   return null;
 }

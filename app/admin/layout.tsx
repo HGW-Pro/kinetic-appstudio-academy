@@ -5,15 +5,7 @@ import { ToastProvider } from "../../components/admin/ToastProvider";
 export const dynamic = "force-dynamic";
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  // Authoritative server-side check. Every request to any /admin/* route
-  // renders this layout first, so this single call protects the entire
-  // admin section.
-  //
-  // NOTE: the site-wide <NavBar /> is already rendered once by the root
-  // app/layout.tsx, which wraps every route including /admin/**. An
-  // earlier fix mistakenly added a second <NavBar /> here, producing two
-  // navigation bars stacked on every admin page. Removed -- the root
-  // layout's NavBar was never actually missing.
+  // This server-side check protects every route in the admin section.
   const admin = await requireAdmin();
 
   return (
