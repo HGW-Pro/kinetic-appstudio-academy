@@ -52,55 +52,51 @@ export default function AcademySidebar() {
   }
 
   return (
-    <aside className="hidden w-60 shrink-0 border-r border-[var(--border)] bg-[var(--surface)] lg:flex lg:flex-col">
-      <div className="flex flex-1 flex-col px-3 py-5">
-        <nav aria-label="Academy navigation" className="flex flex-col gap-1">
-          <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-lo)]">Academy</p>
-          {navigation.map((item) => {
-            const className = `flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium transition ${
-              item.href && isActive(pathname, item.href)
-                ? "bg-[var(--primary)]/[0.09] text-[var(--primary)]"
-                : "text-[var(--text-mid)] hover:bg-[var(--surface-2)] hover:text-[var(--text-hi)]"
-            }`;
-            if (!item.href) {
-              return (
-                <span key={item.label} aria-disabled="true" title="Available in a later phase" className={`${className} cursor-default opacity-55`}>
-                  <Icon name={item.icon} />
-                  <span>{item.label}</span>
-                  {item.comingSoon && <span className="ml-auto text-[10px] font-medium text-[var(--text-lo)]">Soon</span>}
-                </span>
-              );
-            }
-            return <Link key={item.label} href={item.href} className={className}><Icon name={item.icon} /><span>{item.label}</span></Link>;
-          })}
-          <div className="mt-3 border-t border-[var(--border)] pt-3">
-            {isAdmin ? (
-              <Link href="/admin/courses" className="flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-semibold text-[var(--primary)] transition hover:bg-[var(--primary)]/[0.08]">
-                <Icon name="admin" />
-                <span>Admin</span>
-              </Link>
-            ) : (
-              <span aria-disabled="true" className="flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium text-[var(--text-lo)] opacity-55">
-                <Icon name="admin" />
-                <span>Admin</span>
+    <aside className="hidden w-60 shrink-0 overflow-hidden border-r border-[var(--border)] bg-[var(--surface)] lg:sticky lg:top-16 lg:flex lg:h-[calc(100vh-4rem)] lg:self-start lg:flex-col">
+      <nav aria-label="Academy navigation" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto px-3 py-5">
+        <p className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-[var(--text-lo)]">Academy</p>
+        {navigation.map((item) => {
+          const className = `flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium transition ${
+            item.href && isActive(pathname, item.href)
+              ? "bg-[var(--primary)]/[0.09] text-[var(--primary)]"
+              : "text-[var(--text-mid)] hover:bg-[var(--surface-2)] hover:text-[var(--text-hi)]"
+          }`;
+          if (!item.href) {
+            return (
+              <span key={item.label} aria-disabled="true" title="Available in a later phase" className={`${className} cursor-default opacity-55`}>
+                <Icon name={item.icon} />
+                <span>{item.label}</span>
+                {item.comingSoon && <span className="ml-auto text-[10px] font-medium text-[var(--text-lo)]">Soon</span>}
               </span>
-            )}
-          </div>
-        </nav>
+            );
+          }
+          return <Link key={item.label} href={item.href} className={className}><Icon name={item.icon} /><span>{item.label}</span></Link>;
+        })}
+      </nav>
 
-        <div className="mt-auto border-t border-[var(--border)] pt-3">
-          <button
-            type="button"
-            onClick={handleSignOut}
-            className="group flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-left text-sm font-semibold text-[var(--text-mid)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-hi)]"
-          >
-            <span className="text-[var(--text-lo)] transition group-hover:text-[var(--primary)]">
-              <Icon name="logout" />
-            </span>
-            <span>Sign Out</span>
-          </button>
-        </div>
-      </div>
+      <footer className="mt-auto shrink-0 border-t border-[var(--border)] p-4">
+        {isAdmin ? (
+          <Link href="/admin/courses" className="mb-3 flex min-h-11 items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-semibold text-[var(--primary)] shadow-sm transition hover:border-[var(--border-strong)] hover:bg-[var(--surface-3)]">
+            <Icon name="admin" />
+            <span>Admin</span>
+          </Link>
+        ) : (
+          <span aria-disabled="true" className="mb-3 flex min-h-11 items-center gap-3 rounded-lg border border-[var(--border)] bg-[var(--surface-2)] px-3 text-sm font-medium text-[var(--text-lo)] opacity-60">
+            <Icon name="admin" />
+            <span>Admin</span>
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={handleSignOut}
+          className="group flex min-h-11 w-full items-center gap-3 rounded-md px-3 text-left text-sm font-semibold text-[var(--text-mid)] transition hover:bg-[var(--surface-2)] hover:text-[var(--text-hi)]"
+        >
+          <span className="text-[var(--text-lo)] transition group-hover:text-[var(--primary)]">
+            <Icon name="logout" />
+          </span>
+          <span>Sign Out</span>
+        </button>
+      </footer>
     </aside>
   );
 }
